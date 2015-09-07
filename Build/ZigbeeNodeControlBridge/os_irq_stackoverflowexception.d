@@ -1,2 +1,0 @@
-os_irq_stackoverflowexception.o: \
- c:/NXP/bstudio_nxp/workspace/ZigbeeNodeControlBridge2V1_WiFiGateway/Source/ZigbeeNodeControlBridge/os_irq_stackoverflowexception.S
