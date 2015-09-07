@@ -1,0 +1,15 @@
+
+config 'interface' 'loopback'
+    option 'ifname' 'lo'
+    option 'proto' 'static'
+    option 'ipaddr' '127.0.0.1'
+    option 'netmask' '255.0.0.0'
+
+config 'interface' 'lan'
+    option 'ifname' 'eth0'
+    option 'proto' 'dhcp'
+
+config interface 'lan6'
+    option ifname 'eth0'
+    option proto 'static'
+    option ip6addr 'fd04:bd3:80e8:1::2/64'

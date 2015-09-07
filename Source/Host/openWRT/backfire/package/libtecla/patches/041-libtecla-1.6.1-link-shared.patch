@@ -1,0 +1,31 @@
+diff -Naur libtecla/Makefile.rules libtecla.new//Makefile.rules
+--- libtecla/Makefile.rules	2002-12-04 06:26:56.000000000 +0000
++++ libtecla.new//Makefile.rules	2012-05-11 15:39:05.958568151 +0100
+@@ -39,7 +39,7 @@
+ 
+ libtecla$(SUFFIX)$(SHARED_EXT): $(LIB_OBJECTS) $(srcdir)/libtecla.map \
+  libtecla.map.opt
+-	$(LINK_SHARED)
++	$(LINK_SHARED) $(LDFLAGS)
+ 	@endings="$(SHARED_ALT)" ; \
+ 	for alt in $$endings ; do \
+ 	  lnk="libtecla$(SUFFIX)$$alt"; \
+@@ -54,15 +54,15 @@
+ demos: $(DEMO_PROGS)
+ 
+ demo$(SUFFIX): $(OBJDIR)/demo.o
+-	LD_RUN_PATH="$(LIBDIR):$$LD_RUN_PATH:`pwd`" $(CC) $(CFLAGS) -o $@ \
++	LD_RUN_PATH="$(LIBDIR):$$LD_RUN_PATH:`pwd`" $(CC) $(CFLAGS) $(LDFLAGS) -o $@ \
+  $(OBJDIR)/demo.o -L. -ltecla$(SUFFIX) $(LIBS)
+ 
+ demo2$(SUFFIX): $(OBJDIR)/demo2.o
+-	LD_RUN_PATH="$(LIBDIR):$$LD_RUN_PATH:`pwd`" $(CC) $(CFLAGS) -o $@ \
++	LD_RUN_PATH="$(LIBDIR):$$LD_RUN_PATH:`pwd`" $(CC) $(CFLAGS) $(LDFLAGS) -o $@ \
+  $(OBJDIR)/demo2.o -L. -ltecla$(SUFFIX) $(LIBS)
+ 
+ demo3$(SUFFIX): $(OBJDIR)/demo3.o
+-	LD_RUN_PATH="$(LIBDIR):$$LD_RUN_PATH:`pwd`" $(CC) $(CFLAGS) -o $@ \
++	LD_RUN_PATH="$(LIBDIR):$$LD_RUN_PATH:`pwd`" $(CC) $(CFLAGS) $(LDFLAGS) -o $@ \
+  $(OBJDIR)/demo3.o -L. -ltecla$(SUFFIX) $(LIBS)
+ 
+ enhance$(SUFFIX): $(OBJDIR)/enhance.o

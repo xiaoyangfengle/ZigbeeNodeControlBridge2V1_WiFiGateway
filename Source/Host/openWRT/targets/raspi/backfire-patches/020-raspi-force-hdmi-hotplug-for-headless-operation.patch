@@ -1,0 +1,11 @@
+--- backfire/target/linux/brcm2708/image/config.txt	(revision 40431)
++++ backfire/target/linux/brcm2708/image/config.txt	(working copy)
+@@ -90,7 +90,7 @@
+ ##     0        Disabled (Default)
+ ##     1        Use HDMI mode even if no HDMI monitor is detected
+ ##
+-#hdmi_force_hotplug=1
++hdmi_force_hotplug=1
+ 
+ ## hdmi_ignore_hotplug
+ ##     Pretends HDMI hotplug signal is not asserted so it appears a HDMI

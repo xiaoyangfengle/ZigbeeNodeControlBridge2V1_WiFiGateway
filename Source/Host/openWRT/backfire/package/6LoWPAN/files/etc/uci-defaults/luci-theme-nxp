@@ -1,0 +1,6 @@
+#!/bin/sh
+	uci batch <<-EOF
+	set luci.themes.NXP=/luci-static/nxp
+	set luci.main.mediaurlbase=/luci-static/nxp
+	commit luci
+EOF

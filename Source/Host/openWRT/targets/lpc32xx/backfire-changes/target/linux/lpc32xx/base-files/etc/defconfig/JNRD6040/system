@@ -1,0 +1,21 @@
+config system
+    option 'hostname'   'JenNet-IP-BR'
+    option 'timezone'   'UTC'
+
+config rdate
+    option 'interface'  'lan'
+
+config 'led'
+        option 'name' '6LoWPAN Activity'
+        option 'sysfs' 'jnrd6040:yellow:D'
+        option 'trigger' 'netdev'
+        option 'dev' 'tun0'
+        option 'mode' 'link tx rx'
+
+config 'led'
+        option 'name' 'Ethernet Activity'
+        option 'sysfs' 'jnrd6040:green:C'
+        option 'trigger' 'netdev'
+        option 'dev' 'eth0'
+        option 'mode' 'link tx rx'
+

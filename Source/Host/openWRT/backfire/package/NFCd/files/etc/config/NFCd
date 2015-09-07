@@ -1,0 +1,6 @@
+config NFCd
+    option 'ignore'      '0'
+    option 'gpio_pwr'    '/sys/class/gpio/gpo23'
+    option 'gpio_fd'     '/sys/class/gpio/gpio01'
+    option 'i2c_bus'     '/dev/i2c-1'
+    option 'i2c_address' '0x55'

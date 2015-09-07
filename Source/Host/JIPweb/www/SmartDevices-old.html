@@ -1,0 +1,931 @@
+<!DOCTYPE HTML>
+<HTML><HEAD><TITLE>
+NXP Smart Devices
+</TITLE>
+<link rel="stylesheet" href="/style.css" type="text/css" media="screen" />
+
+<script src="/js/jquery.min.js"></script>
+<script src="/js/jquery.history.js"></script>
+<script src="/js/SimpleSlider.js"></script>
+<script src="/js/JIP.js"></script>
+
+<script type="text/javascript"> 
+
+/****************************************************************************
+ *
+ * MODULE:             JIP Web Apps
+ *
+ * COMPONENT:          JIP Smart Devices control web interface
+ *
+ * REVISION:           $Revision: 43426 $
+ *
+ * DATED:              $Date: 2012-06-18 15:24:02 +0100 (Mon, 18 Jun 2012) $
+ *
+ * AUTHOR:             Matt Redfearn
+ *
+ ****************************************************************************
+ *
+ * This software is owned by NXP B.V. and/or its supplier and is protected
+ * under applicable copyright laws. All rights are reserved. We grant You,
+ * and any third parties, a license to use this software solely and
+ * exclusively on NXP products [NXP Microcontrollers such as JN5148, JN5142, JN5139]. 
+ * You, and any third parties must reproduce the copyright and warranty notice
+ * and any other legend of ownership on each copy or partial copy of the 
+ * software.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+
+ * Copyright NXP B.V. 2012. All rights reserved
+ *
+ ***************************************************************************/
+
+var tTemperatureMode = {
+  CELCIUS   : {value: 0, name: "Celcius", code: "&#8451"}, 
+  FAHRENHEIT: {value: 1, name: "Fahrenheit", code: "&#8457"}, 
+};
+
+var TemperatureMode = tTemperatureMode.FAHRENHEIT;
+
+
+function findPos(obj){
+    var current_left = 0, current_top = 0;
+    if (obj.offsetParent){
+        do{
+            current_left += obj.offsetLeft;
+            current_top += obj.offsetTop;
+        }while(obj = obj.offsetParent);
+        return {x: current_left, y: current_top};
+    }
+    return undefined;
+}
+
+
+function vVarUpdated(Status, str)
+{
+    $("#result").html(str + ": " + Status.Description);
+}
+
+
+function vCreateSceneControl(div, name, imgPath, IPv6Address, SceneMIB, SceneVar, SceneValue)
+{    
+    var newdiv = $("<div class='Scene'></div>").appendTo($(div));
+    
+    newdiv.text(name);
+    
+    var img = $("<img />").appendTo($(newdiv))[0];
+    img.src = imgPath;
+    
+    $(newdiv).bind('click', 
+    {
+        IPv6Address: IPv6Address, mib: SceneMIB, variable: SceneVar, value: SceneValue
+    }, 
+    function(event) {
+        var str = "Update " + event.data.IPv6Address + ", Mib " + event.data.mib + ", Var " + event.data.variable + " to " + event.data.value;
+        JIP_SetVar(event.data.IPv6Address, event.data.mib, event.data.variable, event.data.value, vVarUpdated, str)
+    });
+}
+
+
+function vCreateLampControl(div, name, IPv6Address, ModeMIB, ModeVar, LevelMIB, LevelVar, ColourMIB, imgPath)
+{    
+    var newdiv = $("<div class='Lamp'><span></span> \
+                        <h2>All Devices</h2> \
+                        <div class='Lamp_Image'></div> \
+                    </div>"
+    ).appendTo($(div));
+    
+    newdiv.find('h2').eq(0).text(name);
+    newdiv.find('span').eq(0).text("IPv6 Address: " + IPv6Address);
+    
+    if (imgPath)
+    {
+        // If an image is specified, add if to the inner div of class "Lamp_Image"
+        var img = $("<img />").appendTo(newdiv.find('div'))[0];
+        img.src = imgPath;
+    }
+    
+    var offbut = $("<div class='button'>Off</div>").appendTo($(newdiv));
+    $(offbut).bind('click', 
+    {
+        IPv6Address: IPv6Address, mib: ModeMIB, variable: ModeVar,
+    }, 
+    function(event) {
+        var str = "Update " + event.data.IPv6Address + ", Mib " + event.data.mib + ", Var " + event.data.variable + " to " + '0';
+        JIP_SetVar(event.data.IPv6Address, event.data.mib, event.data.variable, 0, vVarUpdated, str)
+    });
+    
+    var onbut = $("<div class='button'>On</div>").appendTo($(newdiv));  
+    $(onbut).bind('click', 
+    {
+        IPv6Address: IPv6Address, mib: ModeMIB, variable: ModeVar,
+    }, 
+    function(event) {
+        var str = "Update " + event.data.IPv6Address + ", Mib " + event.data.mib + ", Var " + event.data.variable + " to " + '1';
+        JIP_SetVar(event.data.IPv6Address, event.data.mib, event.data.variable, 1, vVarUpdated, str)
+    });
+    
+    if (LevelMIB && LevelVar)
+    {
+        // Create the Level control slider if we have been given a LevelMIB and LevelVar
+        var sliderDivID = "slider_" + div + "_" + IPv6Address;
+        var sliderDiv = $("<div class='slider'></div> ").appendTo($(newdiv));    
+        sliderDiv.attr('id',sliderDivID);
+        
+        var slider = new SimpleSlider(sliderDiv.attr('id'), 695, 50); 
+        slider.onNewPosition = function() {
+            if (ActiveBorderRouter)
+            {
+                var pos = parseInt(slider.position * 255); 
+                var str = "Update " + IPv6Address + ", Mib " + LevelMIB + ", Var " + LevelVar + " to " + pos;
+                JIP_SetVar(IPv6Address, LevelMIB, LevelVar, pos, vVarUpdated, str)
+            }
+            else
+            {
+                alert("Please select a border router first");
+                History.pushState({state:"BRList"}, "Available Border Routers", "?state=BRList");
+            }
+        }
+    }
+
+    if (ColourMIB)
+    {
+        var colourImg = $("<img class='Lamp_Colour' src='/img/hsv-shading.png' />").appendTo($(newdiv))[0];
+        $(colourImg).click(function(e) {
+            var IMAGESIZE = 500;
+            $("#colourControlImage").off('click').click(function(e) {
+                // Values the same as the hsv-shading.py script used to generate the original image.
+                
+                var CENTRE = (this.width / IMAGESIZE) * 50.0;
+                var R = (this.width / IMAGESIZE) * 175.0;
+                var FULL = (this.width / IMAGESIZE) * 75.0;
+                
+                var position = findPos(this);
+                var x = e.pageX - position.x;
+                var y = e.pageY - position.y;
+                
+                var tx = x - (this.width / 2);
+                var ty = y - (this.height / 2);
+                var d = Math.sqrt(tx * tx + ty * ty)
+                
+                window.console && console.log("X:" + x + ", y:" + y);
+                
+                if ((x < 0) || (y < 0) || (x > this.width) || (y > this.height))
+                {
+                    window.console && console.log("Out of bounds");
+                    return;
+                }
+                
+                var hue, sat;
+                
+                if (d < CENTRE)
+                {
+                    hue = sat = 0;
+                }
+                else
+                {
+                    if (d <= R)
+                    {
+                        if (0 <= ty)
+                            hue = Math.acos(tx / d)
+                        else
+                            hue = 2 * Math.PI - Math.acos(tx / d)
+
+                        sat = (d / (R - CENTRE)) - (CENTRE / ((R - CENTRE)))
+                    }
+                    else if (d <= (R + FULL))
+                    {
+                        if (0 <= ty)
+                            hue = Math.acos(tx / d)
+                        else
+                            hue = 2 * Math.PI - Math.acos(tx / d)
+                        sat = 1.0;
+                    }
+                    else
+                    {
+                        hue = sat = 0;
+                    }
+                }
+            
+                // Convert to degrees
+                hue = hue * 360.0 / (2 * Math.PI);
+                
+                // Convert to JIP scaling
+                hue = hue * 10;
+                sat = sat * 255;
+
+                hue = ("0000" + Math.floor(hue).toString(16)).slice(-4);
+                sat = ("00" + Math.floor(sat).toString(16)).slice(-2);
+
+                window.console && console.log("Hue:" + hue + ", Saturation:" + sat);
+
+                var newcolour = "0x" + hue + sat;
+
+                var str = "Update " + IPv6Address + ", Mib " + ColourMIB + ", Var " + "HueSatTarget" + " to " + newcolour;
+                    JIP_SetVar(IPv6Address, ColourMIB, "HueSatTarget", newcolour, vVarUpdated, str)
+            });
+            
+            $("#colourControl").fadeIn();
+
+            var ControlHeight = $("#colourControlForeground").height() - $("#colourControlImage").height();
+            var ImgSize = $(window).height() - ControlHeight - 60;
+            ImgSize = (ImgSize < IMAGESIZE) ? ImgSize : IMAGESIZE;
+            $("#colourControlImage").height(ImgSize);
+            $("#colourControlImage").width(ImgSize);
+            $("#colourControlForeground").css({ left:($(window).width()/2) - ($("#colourControlForeground").width()/2)});
+            $("#colourControl").height($(document).height() + "px");
+            $("#colourControl").width($(document).width() + "px");
+        });
+    }
+    return newdiv;
+}
+
+
+function vSetPointUpdated(Status, event)
+{
+    if (Status !== undefined)
+    {
+        $("#result").html(event.str + ": " + Status.Description);
+    }
+    
+    JIP_GetVar(event.IPv6Address, "ThermostatControl", event.SetPoint, function (Status, event, value) {
+        if (Status.Value == 0)
+        {
+            event.element.html(sParseTemperature(value) + TemperatureMode.code);
+        }
+    }, { element: event.element } );
+}
+
+function vModeUpdated(Status, event)
+{
+    if (Status !== undefined)
+    {
+        $("#result").html(event.str + ": " + Status.Description);
+    }
+    
+    JIP_GetVar(event.IPv6Address, "ThermostatControl", "Mode", function (Status, event, value) {
+        if (Status.Value == 0)
+        {
+            // Update Mode.
+            $("#ThermostatSettingsForeground").find('li').each(function(index, element) {
+                if (index == parseInt(value))
+                {
+                    $(element).addClass("selected");
+                }
+                else
+                {
+                    $(element).removeClass("selected");
+                }
+            });
+        }
+    });
+}
+
+
+function sParseTemperature(value)
+{
+    value = parseInt(value);
+    if (isNaN(value))
+    {
+        strval = "?";
+    }
+    else
+    {
+        if (TemperatureMode == tTemperatureMode.FAHRENHEIT)
+        {
+            strval = (((value  / 100) * 1.8) + 32).toFixed(2);
+        }
+        else
+        {
+            strval = ((value) / 100).toFixed(2);
+        }
+    }
+    return strval;
+}
+    
+    
+function vTemperatureUpdated(element, value)
+{
+    element.html(sParseTemperature(value) + TemperatureMode.code)
+}
+
+
+function vCreateThermostatControl(div, name, IPv6Address)
+{    
+    var newdiv = $("<div class='Thermostat'> \
+                        <h2>Thermostat</h2> \
+                        <div> \
+                            <div style='width:60px;height:120px'> \
+                                <img class='Thermostat_Image' src='img/Flame.png'> \
+                                <img class='Thermostat_Image' src='img/Ice.png'> \
+                            </div><div> \
+                                <h1 style='font-size:6em'>?&#8457</h1> \
+                            </div > \
+                        </div> \
+                        <img class='ThermostatSettingsIcon' src='img/cogwheel.png'> \
+                        <span></span> \
+                    </div>"
+    ).appendTo($(div));
+    
+    newdiv.find('img').eq(2).click(function(e) {
+        var HeatSetPoint = $("#ThermostatSettingsForeground").find('h3').eq(0);
+        var CoolSetPoint = $("#ThermostatSettingsForeground").find('h3').eq(1);
+        
+        $("#ThermostatSettingsForeground").find('svg').eq(0).off('click').click(function(e) {
+            var str = "Update " + IPv6Address + ", Mib ThermostatControl, Var HeatSetPoint to 50";
+            JIP_SetVar(IPv6Address, "ThermostatControl", "HeatSetPointChange", 50, vSetPointUpdated, { IPv6Address: IPv6Address, str: str, SetPoint: "HeatSetPoint", element: HeatSetPoint });
+        });
+
+        $("#ThermostatSettingsForeground").find('svg').eq(1).off('click').click(function(e) {
+            var str = "Update " + IPv6Address + ", Mib ThermostatControl, Var HeatSetPoint to -50";
+            JIP_SetVar(IPv6Address, "ThermostatControl", "HeatSetPointChange", -50, vSetPointUpdated, { IPv6Address: IPv6Address, str: str, SetPoint: "HeatSetPoint", element: HeatSetPoint });
+        });
+
+        $("#ThermostatSettingsForeground").find('svg').eq(2).off('click').click(function(e) {
+            var str = "Update " + IPv6Address + ", Mib ThermostatControl, Var CoolSetPoint to 50";
+            JIP_SetVar(IPv6Address, "ThermostatControl", "CoolSetPointChange", 50, vSetPointUpdated, { IPv6Address: IPv6Address, str: str, SetPoint: "CoolSetPoint", element: CoolSetPoint });
+        });
+
+        $("#ThermostatSettingsForeground").find('svg').eq(3).off('click').click(function(e) {
+            var str = "Update " + IPv6Address + ", Mib ThermostatControl, Var CoolSetPoint to -50";
+            JIP_SetVar(IPv6Address, "ThermostatControl", "CoolSetPointChange", -50, vSetPointUpdated, { IPv6Address: IPv6Address, str: str, SetPoint: "CoolSetPoint", element: CoolSetPoint });
+        });
+        
+        
+        // Mode selector
+        $("#ThermostatSettingsForeground").find('li').each(function(index, element) {
+            $(element).off('click').click(function(e) {
+                var str = "Update " + IPv6Address + ", Mib ThermostatControl, Var Mode to " + index;
+                JIP_SetVar(IPv6Address, "ThermostatControl", "Mode", index, vModeUpdated, { str: str, IPv6Address: IPv6Address });
+            });
+        });
+        
+        vSetPointUpdated(undefined, { IPv6Address: IPv6Address, SetPoint: "CoolSetPoint", element: CoolSetPoint });
+        vSetPointUpdated(undefined, { IPv6Address: IPv6Address, SetPoint: "HeatSetPoint", element: HeatSetPoint });
+        vModeUpdated(undefined, { IPv6Address: IPv6Address });
+        
+        $("#ThermostatSettings").fadeIn();
+        
+        $("#ThermostatSettingsForeground").css({ left:($(window).width()/2) - ($("#ThermostatSettingsForeground").width()/2)});
+        $("#ThermostatSettings").height($(document).height() + "px");
+        $("#ThermostatSettings").width($(document).width() + "px");
+    });
+    
+    newdiv.find('h2').eq(0).text(name);
+    newdiv.find('span').eq(0).text("IPv6 Address: " + IPv6Address);
+
+    newdiv.find('h1').eq(0).click(function(e) {
+        if (TemperatureMode == tTemperatureMode.CELCIUS)
+        {
+            TemperatureMode = tTemperatureMode.FAHRENHEIT;
+        }
+        else
+        {
+            TemperatureMode = tTemperatureMode.CELCIUS;
+        }
+        vTemperatureUpdated(newdiv.find('h1').eq(0), parseFloat(newdiv.find('h1').eq(0).html) * 100);
+    });
+    
+    JIP_GetVar(IPv6Address, "ThermostatStatus", "LocalTemperature", function (Status, event, value) {
+        if (Status.Value == 0)
+        {
+            // Update temperature.
+            vTemperatureUpdated(newdiv.find('h1').eq(0), value);
+        }
+    }, 0, 1000);
+    
+    JIP_GetVar(IPv6Address, "ThermostatStatus", "HeatDemand", function (Status, event, value) {
+        if (Status.Value == 0)
+        {
+            // Update heating demand
+            var img = $(newdiv.find('img').eq(0));
+            if ((value > 0) && (img.css('display') == 'none'))
+            {
+                img.fadeIn();
+            }
+            else if ((value == 0) && (img.css('display') != 'none'))
+            {
+                img.fadeOut();
+            }   
+        }
+    }, 0, 1000);
+    
+    
+    JIP_GetVar(IPv6Address, "ThermostatStatus", "CoolDemand", function (Status, event, value) {
+        if (Status.Value == 0)
+        {
+            // Update cooling demand
+            var img = $(newdiv.find('img').eq(1));
+            if ((value > 0) && (img.css('display') == 'none'))
+            {
+                img.fadeIn();
+            }
+            else if ((value == 0) && (img.css('display') != 'none'))
+            {
+                img.fadeOut();
+            }   
+        }
+    }, 0, 1000);
+
+    return newdiv;
+}
+
+
+function vDisplayNodeName(Status, element, name)
+{
+    if (Status.Value == 0)
+    {
+        // Make sure the node has a valid name string
+        if (name != "")
+        {
+            // Set content to name
+            element.text(name);
+        }
+    }
+    else
+    {
+        $("#result").html("Failed to read name of node");
+    }
+}
+
+
+function vDisplayIndividual(Status)
+{
+    $("#Individual").empty()
+ 
+    if (Status.Value == 0)
+    {
+        for (var nodeidx in Network.Nodes)
+        {
+            var ReadName = false;
+            
+            // Identify Thermostat Devices in the network
+            if ($.inArray(Network.Nodes[nodeidx].DeviceID,
+                // Array of Colour Lamp Device IDs
+                [0x08014001]
+            ) >= 0)
+            {
+                // Create Thermostat for this device
+                var Control = vCreateThermostatControl("#Individual", Network.Nodes[nodeidx].IPv6Address, Network.Nodes[nodeidx].IPv6Address);
+                ReadName = true;
+            }
+            
+            // And trigger a read of the device name.
+            if (ReadName)
+            {
+                JIP_GetVar(Network.Nodes[nodeidx].IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, Control.find('h2').eq(0)); 
+                
+                // Also bind a click event to the name so that it can be clicked on to re-read the name.
+                $(Control).find('h2').bind('click', 
+                {
+                    IPv6Address: Network.Nodes[nodeidx].IPv6Address
+                }, 
+                function(event) {
+                    JIP_GetVar(event.data.IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, Control.find('h2').eq(0)); 
+                });
+            }
+        }
+        
+        for (var nodeidx in Network.Nodes)
+        {
+            var ReadName = false;
+            
+            // Identify Mono Lamp Devices in the network
+            if ($.inArray(Network.Nodes[nodeidx].DeviceID,
+                // Array of Mono Lamp Device IDs
+                [0x08013070, 0x08012027, 0x08012108, 0x08011050, 0x08011175, 
+                 0x0801070F, 0x0801027F, 0x0801108F, 0x0801175F, 0x0801210F,
+                 0x08040700,
+                ]
+            ) >= 0)
+            {
+                // Create lamp control for this device
+                var Control = vCreateLampControl("#Individual", Network.Nodes[nodeidx].IPv6Address, Network.Nodes[nodeidx].IPv6Address, 
+                                                     "DeviceControl", "Mode", "BulbControl", "LumTarget", false,
+                                                     "/img/led_mono.png");
+                ReadName = true;
+            }
+            
+            // Identify Colour Lamp Devices in the network
+            if ($.inArray(Network.Nodes[nodeidx].DeviceID,
+                // Array of Colour Lamp Device IDs
+                [0x08011750]
+            ) >= 0)
+            {
+                // Create lamp control for this device
+                var Control = vCreateLampControl("#Individual", Network.Nodes[nodeidx].IPv6Address, Network.Nodes[nodeidx].IPv6Address, 
+                                                     "DeviceControl", "Mode", "BulbControl", "LumTarget", "BulbColour",
+                                                     "/img/led_colour.png");
+                ReadName = true;
+            }
+            
+            // And trigger a read of the device name.
+            if (ReadName)
+            {
+                JIP_GetVar(Network.Nodes[nodeidx].IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, Control.find('h2').eq(0)); 
+                
+                // Also bind a click event to the name so that it can be clicked on to re-read the name.
+                $(Control).find('h2').bind('click', 
+                {
+                    IPv6Address: Network.Nodes[nodeidx].IPv6Address
+                }, 
+                function(event) {
+                    JIP_GetVar(event.data.IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, Control.find('h2').eq(0)); 
+                });
+            }
+        }
+        if ($("#Individual").children().length == 0)
+        {
+            newnode = $(document.createElement("div"));
+            newnode.html("<center><H3>No devices found in network</H3></center>")
+            $("#Individual").append(newnode);
+        }
+    }
+    else
+    {
+        newnode = $(document.createElement("div"));
+        newnode.html("Failed to discover network: " + Status.Description);
+        $("#Individual").append(newnode);
+    }
+}
+
+function vDisplayGlobal(Status)
+{
+    $("#Global").empty()
+ 
+    if (Status.Value == 0)
+    {
+        vCreateLampControl("#Global", "All Devices", "ff15::f00f", "DeviceControl", "Mode", "BulbControl", "LumTarget", "BulbColour");
+        
+        //vCreateThermostatControl("#Global", "test", "test");
+        
+        for (var nodeidx in Network.Nodes)
+        {
+            var ReadName = false;
+            
+            // Identify Thermostat Devices in the network
+            if ($.inArray(Network.Nodes[nodeidx].DeviceID,
+                // Array of Colour Lamp Device IDs
+                [0x08014001]
+            ) >= 0)
+            {
+                // Create Thermostat for this device
+                var Control = vCreateThermostatControl("#Global", Network.Nodes[nodeidx].IPv6Address, Network.Nodes[nodeidx].IPv6Address);
+                ReadName = true;
+            }
+            
+            // And trigger a read of the device name.
+            if (ReadName)
+            {
+                JIP_GetVar(Network.Nodes[nodeidx].IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, Control.find('h2').eq(0)); 
+                
+                // Also bind a click event to the name so that it can be clicked on to re-read the name.
+                $(Control).find('h2').bind('click', 
+                {
+                    IPv6Address: Network.Nodes[nodeidx].IPv6Address
+                }, 
+                function(event) {
+                    JIP_GetVar(event.data.IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, Control.find('h2').eq(0)); 
+                });
+            }
+        }
+    }
+    else
+    {
+        newnode = $(document.createElement("div"));
+        newnode.html("Failed to discover network: " + Status.Description);
+        $("#Global").append(newnode);
+    }
+}
+
+
+// Trigger state change
+function vBorderRouterSelectedEvent(event)
+{
+    ActiveBorderRouter = event.data.BR;
+    History.pushState({state:"Global", BR:ActiveBorderRouter}, 
+                      "Global Control", 
+                      "?state=Global&BR=" + event.data.BR);
+    
+    // When a border router has been selected, enable the other nav buttons, removing any old evetns first
+    vEnableMenu(ActiveBorderRouter);
+}
+
+
+function vEnableMenu(ActiveBorderRouter)
+{
+    $('#navGlobal').unbind('click').click(
+        function() 
+        {
+            //alert("Global click, Border router: " + ActiveBorderRouter);
+            History.pushState({state:"Global", BR:ActiveBorderRouter}, "Global Control", "?state=Global&BR=" + ActiveBorderRouter);
+        }
+    );
+    
+    $('#navGroup').unbind('click').click(
+        function() 
+        {
+            //alert("Group click, Border router: " + ActiveBorderRouter);
+            History.pushState({state:"Group", BR:ActiveBorderRouter}, "Group Control", "?state=Group&BR=" + ActiveBorderRouter);
+        }
+    );
+    
+    $('#navIndividual').unbind('click').click(
+        function() 
+        {
+            //alert("Group click, Border router: " + ActiveBorderRouter);
+            History.pushState({state:"Individual", BR:ActiveBorderRouter}, "Individual Control", "?state=Individual&BR=" + ActiveBorderRouter);
+        }
+    );
+    
+    $('#navScene').unbind('click').click(
+        function() 
+        {
+            //alert("Group click, Border router: " + ActiveBorderRouter);
+            History.pushState({state:"Scene", BR:ActiveBorderRouter}, "Scene Control", "?state=Scene&BR=" + ActiveBorderRouter);
+        }
+    );
+}
+
+
+function vDisplayBRs(Status)
+{
+    $("#BRList").empty().append("<H2>Available Border Routers</H2><HR/>");
+ 
+    if (Status.Value == 0)
+    {
+        for (var bridx in BRList)
+        {
+            newbr = $(document.createElement("a"));
+            newbr.click({BR:BRList[bridx]}, vBorderRouterSelectedEvent);
+            newbr.html("<H2>" + BRList[bridx] + "</H2>");
+            $("#BRList").append(newbr);
+            $("#BRList").append("<br/>");
+        }
+    }
+    else
+    {
+        newbr = $(document.createElement("div"));
+        newbr.html("Failed to discover Border Router addresses: " + Status.Description);
+        $("#BRList").append(newbr);
+    }
+}
+
+
+function vHandleState(){
+    var State = History.getState();
+    
+    JIP_CancelPendingRequests();
+    
+    //alert("State changed to " + State.data.state);
+    
+    $("#result").empty();
+    
+    if (State.data.state == "BRList")
+    {
+        //alert("Display available border routers");
+        $('#navBRList').addClass("selected");
+        $('#navGlobal').removeClass("selected");
+        $('#navGroup').removeClass("selected");
+        $('#navIndividual').removeClass("selected");
+        $('#navScene').removeClass("selected");
+        
+        $(".scroll_container").animate({"left": -($("#BRList").position().left)}, 400);
+        
+        JIP_DiscoverBRs(vDisplayBRs);
+    }
+    else if (State.data.state == "Global")
+    {
+        //alert("Display Global controls ");
+        $('#navBRList').removeClass("selected");
+        $('#navGlobal').addClass("selected");
+        $('#navGroup').removeClass("selected");
+        $('#navIndividual').removeClass("selected");
+        $('#navScene').removeClass("selected");
+        
+        $(".scroll_container").animate({"left": -($("#Global").position().left)}, 400);
+        
+        //JIP_Discover(vDisplayGlobal, State.data.BR);
+    }
+    else if (State.data.state == "Group")
+    {
+        //alert("Display Group controls ");
+        $('#navBRList').removeClass("selected");
+        $('#navGlobal').removeClass("selected");
+        $('#navGroup').addClass("selected");
+        $('#navIndividual').removeClass("selected");
+        $('#navScene').removeClass("selected");
+        
+        $(".scroll_container").animate({"left": -($("#Group").position().left)}, 400);
+    }
+    else if (State.data.state == "Individual")
+    {
+        JIP_Discover(vDisplayIndividual, State.data.BR);
+        //alert("Display Individual controls ");
+        $('#navBRList').removeClass("selected");
+        $('#navGlobal').removeClass("selected");
+        $('#navGroup').removeClass("selected");
+        $('#navIndividual').addClass("selected");
+        $('#navScene').removeClass("selected");
+        
+        $(".scroll_container").animate({"left": -($("#Individual").position().left)}, 400);
+    }
+    else if (State.data.state == "Scene")
+    {
+        //alert("Display Scene controls ");
+        $('#navBRList').removeClass("selected");
+        $('#navGlobal').removeClass("selected");
+        $('#navGroup').removeClass("selected");
+        $('#navIndividual').removeClass("selected");
+        $('#navScene').addClass("selected");
+        
+        $(".scroll_container").animate({"left": -($("#Scene").position().left)}, 400);
+    }
+}
+
+
+$(document).ready(function(){
+    // Prepare
+    var History = window.History;
+        State = History.getState(),
+        $log = $('#result');
+        
+    if ( !History.enabled ) {
+         // History.js is disabled for this browser.
+        return false;
+    }
+    
+    // Set up menu
+    $('#navBRList').click(
+        function() 
+        {
+            History.pushState({state:"BRList"}, "Available Border Routers", "?state=BRList");
+        }
+    );
+
+    // Bind to StateChange Event
+    History.Adapter.bind(window,'statechange',vHandleState);
+    
+    // If this is the first page, go to BRList state.
+    if (State.data.state == undefined)
+    {
+        History.pushState({state:"BRList"}, "Available Border Routers", "?state=BRList");
+        vHandleState();
+    }
+    else
+    {
+        // Need to re-discover the network after a refresh
+        if (State.data.BR != undefined)
+        {
+            vEnableMenu(State.data.BR);
+        }
+        else
+        {
+            // Or display the list or BRs.
+            History.pushState({state:"BRList"}, "Available Border Routers", "?state=BRList");
+        }
+        vHandleState();
+    }
+
+    JIP_GetVersion(function (Result) {
+        if (Result.Status.Value == 0)
+        {
+            $("#footerbar").replaceWith("<div id=\"footerbar\">Smart Devices version 1.5 using JIPcgi version " + Result.Version.JIPcgi + " libJIP version " + Result.Version.libJIP + "</div>");
+        }
+    });
+    
+    // Set up the close button.
+    $("#colourControl").find(":button").click(function() {
+        $("#colourControl").fadeOut();
+    });
+    
+    $(document).keyup(function(e) {
+        if (e.keyCode == 27) 
+        {
+            // Fade the colour control if ESC is presed
+            $("#colourControl").fadeOut();
+        }
+    });
+    
+    return;
+});
+
+
+</script>
+    
+</HEAD><body><div id="container" >
+<div id="header"><div style="float: left;"><H1>NXP IoT Smart Devices</H1></div><div style="float: right;"><img src="/img/NXP_logo.gif"></div></div>
+<div id="navigation"><ul>
+    <li id="navBRList">Border Routers</li>
+    <li id="navGlobal">Global Control</li>
+    <li id="navGroup">Group Control</li>
+    <li id="navIndividual">Individual Control</li>
+    <li id="navScene">Scene Control</li>
+</ul></div>
+
+<div id="colourControl">
+<div id="colourControlForeground">
+<h1>Adjust colour</h1>
+<img id="colourControlImage" src="/img/hsv-shading.png">
+<input type="button" class="CloseButton" onClick="$('#colourControl').fadeOut()" value="Close">
+</div></div>
+
+<div id="ThermostatSettings">
+<div id="ThermostatSettingsForeground">
+<h1>Thermostat Settings</h1>
+<div class="centerblock" style="overflow:hidden;">
+    <fieldset><legend>Mode</legend>
+        <ul>
+            <li>Off</li>
+            <li>Automatic</li>
+            <div style="clear:both" />
+            <li>Cooling Only</li>
+            <li>Heating Only</li>
+        </ul>
+    </fieldset>
+    <fieldset><legend>Heat</legend>
+        <svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+            <polygon points="25,0 50,50 25,40 0,50"
+            style="fill:red;stroke-width:0"/>
+        </svg>
+        <h3>25&#8451</h3>
+        <svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+            <polygon points="25,50 50,0 25,10 0,0"
+            style="fill:blue;stroke-width:0"/>
+        </svg>
+    </fieldset>
+    <fieldset><legend>Cool</legend>
+        <svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+            <polygon points="25,0 50,50 25,40 0,50"
+            style="fill:red;stroke-width:0"/>
+        </svg>
+        <h3>25&#8451</h3>
+        <svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+            <polygon points="25,50 50,0 25,10 0,0"
+            style="fill:blue;stroke-width:0"/>
+        </svg>
+    </fieldset>
+</div>
+<input type="button" class="CloseButton" onClick="$('#ThermostatSettings').fadeOut()" value="Close">
+</div></div>
+
+
+<div id="content">
+    <div class="scroll_container">
+        <div id="BRList" class="scroll">
+            <P style="margin-left: 10px; "><H2>Available Border Routers</H2></P><HR/>
+        </div>
+        <div id="Global" class="scroll">
+            
+            <script language="javascript">
+                vCreateLampControl("#Global", "All Devices", "ff15::f00f", "DeviceControl", "Mode", "BulbControl", "LumTarget", "BulbColour");
+            </script>
+            
+<!--            <script language="javascript">
+            vCreateThermostatControl("#Global", "Thermostat 1234", "fd04:bd3:80e8:1::1234");
+            </script>-->
+        </div>
+        <div id="Group" class="scroll">
+        
+            <script language="javascript">
+                vCreateLampControl("#Group", "Hall", "ff15::a00a", "DeviceControl", "Mode", "BulbControl", "LumTarget", "BulbColour");
+                vCreateLampControl("#Group", "Lounge", "ff15::b00b", "DeviceControl", "Mode", "BulbControl", "LumTarget", "BulbColour");
+            </script>
+
+        </div>
+        
+        
+        <div id="Individual" class="scroll">
+            <!--  Individual control filled in when clicked on  -->
+            &nbsp <!-- Placeholder in div -->
+        </div>
+        
+        <div id="Scene" class="scroll">
+            <div id="Scenes">
+                <script language="javascript">
+                    vCreateSceneControl("#Scenes", "Home",      "/img/home.png",        "ff15::f00f", "DeviceControl", "SceneId", 0xA00A);
+                    vCreateSceneControl("#Scenes", "Away",      "/img/away.png",        "ff15::f00f", "DeviceControl", "SceneId", 0xB00B);
+                    vCreateSceneControl("#Scenes", "Movie",     "/img/tv.png",          "ff15::f00f", "DeviceControl", "SceneId", 0xC00C);
+                    vCreateSceneControl("#Scenes", "Reading",   "/img/reading.png",     "ff15::f00f", "DeviceControl", "SceneId", 0xD00D);
+                </script>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="after"></div>
+</div>
+<div id="footer">
+<div id="result"></div>
+<div id="footerbar">Smart Devices version 1.6</div>
+</div>
+</body></HTML>

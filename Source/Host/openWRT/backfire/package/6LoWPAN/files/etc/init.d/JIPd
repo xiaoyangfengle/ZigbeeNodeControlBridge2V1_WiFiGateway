@@ -1,0 +1,43 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2011 NXP Semiconductor
+
+START=99
+PROG=JIPd
+
+
+start_JIPd() {
+    local section="$1"
+
+    config_get_bool ignore "$section" ignore 0
+    [ "$ignore" -ne 0 ] && return 0
+
+    local listen4
+    config_get listen4 "${section}" listen4
+
+    local port
+    config_get port "${section}" port
+    [ -z $port ] && port=1873
+
+    local args
+    args="-4 $listen4 -p $port"
+    
+    echo "Starting $PROG with arguments $args"
+    
+    /sbin/$PROG $args
+
+    return $?
+}
+
+start () {
+    config_load 6LoWPAN
+    
+    args=""
+    
+    config_foreach start_JIPd JIPd
+
+}
+
+stop () {
+    killall $PROG
+}
+

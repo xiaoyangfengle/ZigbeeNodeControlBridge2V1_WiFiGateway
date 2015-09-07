@@ -1,0 +1,150 @@
+--- a/package/mtd/src/jffs2.c
++++ b/package/mtd/src/jffs2.c
+@@ -58,7 +58,18 @@
+ 		ofs += (size - (ofs % size));
+ 	}
+ 	ofs = ofs % erasesize;
+-	if (ofs == 0) {
++	if (ofs == 0)
++	{
++		while (mtd_block_is_bad(outfd, mtdofs) && (mtdofs < mtdsize))
++		{
++			if (!quiet)
++				fprintf(stderr, "\nSkipping bad block at 0x%08x   ", mtdofs);
++			
++			mtdofs += erasesize;
++			
++			// Move the file pointer along over the bad block.
++			lseek(outfd, erasesize, SEEK_CUR);
++		}
+ 		mtd_erase_block(outfd, mtdofs);
+ 		write(outfd, buf, erasesize);
+ 		mtdofs += erasesize;
+--- a/package/mtd/src/mtd.c
++++ b/package/mtd/src/mtd.c
+@@ -60,6 +60,7 @@
+ int no_erase;
+ int mtdsize = 0;
+ int erasesize = 0;
++int mtdtype = 0;
+ 
+ int mtd_open(const char *mtd, bool block)
+ {
+@@ -105,10 +106,28 @@
+ 	}
+ 	mtdsize = mtdInfo.size;
+ 	erasesize = mtdInfo.erasesize;
++	mtdtype = mtdInfo.type;
+ 
+ 	return fd;
+ }
+ 
++int mtd_block_is_bad(int fd, int offset)
++{
++	int r = 0;
++	loff_t o = offset;
++	
++	if (mtdtype == MTD_NANDFLASH)
++	{
++		r = ioctl(fd, MEMGETBADBLOCK, &o);
++		if (r < 0)
++		{
++			fprintf(stderr, "Failed to get erase block status\n");
++			exit(1);
++		}
++	}
++	return r;
++}
++
+ int mtd_erase_block(int fd, int offset)
+ {
+ 	struct erase_info_user mtdEraseInfo;
+@@ -238,10 +257,17 @@
+ 	for (mtdEraseInfo.start = 0;
+ 		 mtdEraseInfo.start < mtdsize;
+ 		 mtdEraseInfo.start += erasesize) {
+-
+-		ioctl(fd, MEMUNLOCK, &mtdEraseInfo);
+-		if(ioctl(fd, MEMERASE, &mtdEraseInfo))
+-			fprintf(stderr, "Failed to erase block on %s at 0x%x\n", mtd, mtdEraseInfo.start);
++		if (mtd_block_is_bad(fd, mtdEraseInfo.start))
++		{
++			if (!quiet)
++				fprintf(stderr, "\nSkipping bad block at 0x%x   ", mtdEraseInfo.start);
++		}
++		else
++		{
++			ioctl(fd, MEMUNLOCK, &mtdEraseInfo);
++			if(ioctl(fd, MEMERASE, &mtdEraseInfo))
++				fprintf(stderr, "Failed to erase block on %s at 0x%x\n", mtd, mtdEraseInfo.start);
++		}
+ 	}
+ 
+ 	close(fd);
+@@ -296,6 +322,7 @@
+ 	ssize_t skip = 0;
+ 	uint32_t offset = 0;
+ 	int jffs2_replaced = 0;
++	int skip_bad_blocks = 0;
+ 
+ #ifdef FIS_SUPPORT
+ 	static struct fis_part new_parts[MAX_ARGS];
+@@ -401,7 +428,13 @@
+ 
+ 		if (buflen == 0)
+ 			break;
+-
++		
++		if (buflen < erasesize)
++		{
++			memset(&buf[buflen], 0xff, erasesize - buflen);
++			buflen = erasesize;
++		}
++		
+ 		if (skip > 0) {
+ 			skip -= buflen;
+ 			buflen = 0;
+@@ -439,11 +472,24 @@
+ 		/* need to erase the next block before writing data to it */
+ 		if(!no_erase)
+ 		{
+-			while (w + buflen > e) {
++			while (w + buflen > e - skip_bad_blocks) {
+ 				if (!quiet)
+ 					fprintf(stderr, "\b\b\b[e]");
+ 
++				if (mtd_block_is_bad(fd, e))
++				{
++					if (!quiet)
++						fprintf(stderr, "\nSkipping bad block at 0x%08x   ", e);
++					
++					skip_bad_blocks += erasesize;
++					e += erasesize;
++					
++					// Move the file pointer along over the bad block.
++					lseek(fd, erasesize, SEEK_CUR);
++					continue;
++				}
+ 
++				//fprintf(stderr, "erase at offset 0x%08x\n", e);
+ 				if (mtd_erase_block(fd, e) < 0) {
+ 					if (next) {
+ 						if (w < e) {
+@@ -470,6 +516,7 @@
+ 		if (!quiet)
+ 			fprintf(stderr, "\b\b\b[w]");
+ 
++        //fprintf(stderr, "write 0x%x bytes at offset 0x%08x\n", buflen, lseek(fd, 0, SEEK_CUR));
+ 		if ((result = write(fd, buf + offset, buflen)) < buflen) {
+ 			if (result < 0) {
+ 				fprintf(stderr, "Error writing image.\n");
+--- a/package/mtd/src/mtd.h
++++ b/package/mtd/src/mtd.h
+@@ -15,6 +15,7 @@
+ 
+ extern int mtd_open(const char *mtd, bool block);
+ extern int mtd_check_open(const char *mtd);
++extern int mtd_block_is_bad(int fd, int offset);
+ extern int mtd_erase_block(int fd, int offset);
+ extern int mtd_write_buffer(int fd, const char *buf, int offset, int length);
+ extern int mtd_write_jffs2(const char *mtd, const char *filename, const char *dir);

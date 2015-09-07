@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<JIP_Cache Version="4">
+ <MibIdCache>
+  <Mib ID="0xffffff00">
+   <Var Index="00" Name="MacAddr"           Type="07" Access="00" Security="00"/>
+   <Var Index="01" Name="DescriptiveName"   Type="10" Access="02" Security="00"/>
+   <Var Index="02" Name="Version"           Type="10" Access="00" Security="00"/>
+   <Var Index="03" Name="TxPower"           Type="04" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xffffff01">
+   <Var Index="00" Name="DeviceType"        Type="06" Access="00" Security="00"/>
+   <Var Index="01" Name="Parent Interface"  Type="07" Access="01" Security="00"/>
+   <Var Index="02" Name="TreeVersion"       Type="06" Access="01" Security="00"/>
+   <Var Index="03" Name="SubTreeNodes"      Type="06" Access="01" Security="00"/>
+   <Var Index="04" Name="NetworkTable"      Type="75" Access="01" Security="00"/>
+   <Var Index="05" Name="LastChange"        Type="11" Access="01" Security="00"/>
+   <Var Index="06" Name="NeighbourTable"    Type="75" Access="01" Security="00"/>
+   <Var Index="07" Name="Depth"             Type="05" Access="01" Security="00"/>
+  </Mib>
+  <Mib ID="0xffffff02">
+   <Var Index="00" Name="Groups"            Type="75" Access="01" Security="00"/>
+   <Var Index="01" Name="AddGroup"          Type="11" Access="02" Security="00"/>
+   <Var Index="02" Name="RemoveGroup"       Type="11" Access="02" Security="00"/>
+   <Var Index="03" Name="ClearGroups"       Type="04" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xffffff03">
+   <Var Index="00" Name="Images"            Type="75" Access="01" Security="00"/>
+   <Var Index="01" Name="DeviceID"          Type="06" Access="02" Security="00"/>
+   <Var Index="02" Name="ChipSet"           Type="05" Access="02" Security="00"/>
+   <Var Index="03" Name="Revision"          Type="05" Access="02" Security="00"/>
+   <Var Index="04" Name="Download"          Type="04" Access="02" Security="00"/>
+   <Var Index="05" Name="LoadImage"         Type="04" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xffffff04">
+   <Var Index="00" Name="DeviceID"          Type="06" Access="00" Security="00"/>
+   <Var Index="01" Name="DeviceTypes"       Type="11" Access="00" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffd01">
+   <Var Index="00" Name="FactoryReset"      Type="00" Access="02" Security="00"/>
+   <Var Index="01" Name="PermitJoining"     Type="00" Access="02" Security="00"/>
+   <Var Index="02" Name="Touchlink"         Type="00" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe80">
+   <Var Index="00" Name="SystemStatus"      Type="05" Access="01" Security="00"/>
+   <Var Index="01" Name="ColdStartCount"    Type="05" Access="01" Security="00"/>
+   <Var Index="02" Name="ResetCount"        Type="05" Access="01" Security="00"/>
+   <Var Index="03" Name="WatchdogCount"     Type="05" Access="01" Security="00"/>
+   <Var Index="04" Name="BrownoutCount"     Type="05" Access="01" Security="00"/>
+   <Var Index="05" Name="HeapMin"           Type="06" Access="01" Security="00"/>
+   <Var Index="06" Name="HeapMax"           Type="06" Access="01" Security="00"/>
+   <Var Index="07" Name="StackMin"          Type="06" Access="01" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe82">
+   <Var Index="00" Name="Reset"             Type="05" Access="02" Security="00"/>
+   <Var Index="01" Name="FactoryReset"      Type="05" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe88">
+   <Var Index="00" Name="RunTime"           Type="06" Access="01" Security="00"/>
+   <Var Index="01" Name="UpCount"           Type="05" Access="01" Security="00"/>
+   <Var Index="02" Name="UpTime"            Type="06" Access="01" Security="00"/>
+   <Var Index="03" Name="DownTime"          Type="06" Access="01" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe8b">
+   <Var Index="00" Name="KeyNetwork"        Type="11" Access="02" Security="00"/>
+   <Var Index="01" Name="KeyGateway"        Type="11" Access="02" Security="00"/>
+   <Var Index="02" Name="KeyStandalone"     Type="11" Access="02" Security="00"/>
+   <Var Index="03" Name="Channel"           Type="04" Access="01" Security="00"/>
+   <Var Index="04" Name="PanId"             Type="05" Access="01" Security="00"/>
+   <Var Index="05" Name="Rejoin"            Type="05" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe00"> <!-- Bulb Status -->
+   <Var Index="00" Name="OnCount"           Type="05" Access="01" Security="00"/>
+   <Var Index="01" Name="OnTime"            Type="06" Access="01" Security="00"/>
+   <Var Index="02" Name="OffTime"           Type="06" Access="01" Security="00"/>
+   <Var Index="03" Name="ChipTemp"          Type="01" Access="01" Security="00"/>
+   <Var Index="04" Name="BusVolts"          Type="01" Access="01" Security="00"/>
+  </Mib>  
+  <Mib ID="0xfffffe01"> <!-- Bulb Config -->
+   <Var Index="00" Name="LumRate"           Type="04" Access="02" Security="00"/>
+   <Var Index="01" Name="InitMode"          Type="04" Access="02" Security="00"/>
+   <Var Index="02" Name="InitLumTarget"     Type="04" Access="02" Security="00"/>
+   <Var Index="03" Name="DownUpCadFlags"    Type="04" Access="02" Security="00"/>
+   <Var Index="04" Name="DownCadence"       Type="06" Access="02" Security="00"/>
+   <Var Index="05" Name="DownCadTimer"      Type="05" Access="02" Security="00"/>
+   <Var Index="06" Name="UpCadence"         Type="06" Access="02" Security="00"/>
+   <Var Index="07" Name="UpCadTimer"        Type="05" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe03"> <!-- Bulb Scene -->
+   <Var Index="00" Name="AddSceneId"        Type="05" Access="02" Security="00"/>
+   <Var Index="01" Name="DelSceneId"        Type="05" Access="02" Security="00"/>
+   <Var Index="02" Name="SceneId"           Type="75" Access="01" Security="00"/>
+   <Var Index="03" Name="SceneMode"         Type="75" Access="01" Security="00"/>
+   <Var Index="04" Name="SceneLumTarget"    Type="75" Access="01" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe04"> <!-- Bulb Control -->
+   <Var Index="00" Name="Mode"              Type="04" Access="02" Security="00"/>
+   <Var Index="01" Name="SceneId"           Type="05" Access="02" Security="00"/>
+   <Var Index="02" Name="LumTarget"         Type="04" Access="02" Security="00"/>
+   <Var Index="03" Name="LumCurrent"        Type="04" Access="02" Security="00"/>
+   <Var Index="04" Name="LumChange"         Type="01" Access="02" Security="00"/>
+   <Var Index="05" Name="LumCadence"        Type="06" Access="02" Security="00"/>
+   <Var Index="06" Name="LumCadTimer"       Type="05" Access="02" Security="00"/>
+  </Mib>
+  
+  <Mib ID="0xfffffe09"> <!-- Colour Config -->
+   <Var Index="00" Name="TransitionTime"    Type="05" Access="02" Security="00"/>
+   <Var Index="01" Name="InitMode"          Type="04" Access="02" Security="00"/>
+   <Var Index="02" Name="InitXYTarget"      Type="06" Access="02" Security="00"/>
+   <Var Index="03" Name="XYPrimaryWhite"    Type="06" Access="02" Security="00"/>
+   <Var Index="04" Name="XYPrimary1"        Type="06" Access="02" Security="00"/>
+   <Var Index="05" Name="XYPrimary2"        Type="06" Access="02" Security="00"/>
+   <Var Index="06" Name="XYPrimary3"        Type="06" Access="02" Security="00"/>
+   <Var Index="07" Name="XYPrimary4"        Type="06" Access="02" Security="00"/>
+   <Var Index="08" Name="XYPrimary5"        Type="06" Access="02" Security="00"/>
+   <Var Index="09" Name="XYPrimary6"        Type="06" Access="02" Security="00"/>
+   <Var Index="10" Name="CctMin"            Type="05" Access="02" Security="00"/>
+   <Var Index="11" Name="CctMax"            Type="05" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe0c"> <!-- Colour Control -->
+   <Var Index="00" Name="Mode"              Type="04" Access="02" Security="00"/>
+   <Var Index="01" Name="SceneId"           Type="05" Access="02" Security="00"/>
+   <Var Index="02" Name="XYTarget"          Type="06" Access="02" Security="00"/>
+   <Var Index="03" Name="XYCurrent"         Type="06" Access="02" Security="00"/>
+   <Var Index="04" Name="XTarget"           Type="05" Access="02" Security="00"/>
+   <Var Index="05" Name="YTarget"           Type="05" Access="02" Security="00"/>
+   <Var Index="06" Name="HueTarget"         Type="05" Access="02" Security="00"/>
+   <Var Index="07" Name="HueChange"         Type="01" Access="02" Security="00"/>
+   <Var Index="08" Name="SatTarget"         Type="04" Access="02" Security="00"/>
+   <Var Index="09" Name="SatChange"         Type="00" Access="02" Security="00"/>
+   <Var Index="10" Name="HueSatTarget"      Type="06" Access="02" Security="00"/>
+   <Var Index="11" Name="HueSatCurrent"     Type="06" Access="02" Security="00"/>
+   <Var Index="12" Name="CctTarget"         Type="05" Access="02" Security="00"/>
+   <Var Index="13" Name="CctCurrent"        Type="05" Access="02" Security="00"/>
+   <Var Index="14" Name="CctChange"         Type="01" Access="02" Security="00"/>
+   <Var Index="15" Name="RedCurrent"        Type="04" Access="01" Security="00"/>
+   <Var Index="16" Name="GreenCurrent"      Type="04" Access="01" Security="00"/>
+   <Var Index="17" Name="BlueCurrent"       Type="04" Access="01" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe50">
+   <Var Index="00" Name="LocalTemperature"  Type="01" Access="01" Security="00"/>
+   <Var Index="01" Name="CoolDemand"        Type="04" Access="01" Security="00"/>
+   <Var Index="02" Name="HeatDemand"        Type="04" Access="01" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffe51">
+   <Var Index="00" Name="Mode"              Type="04" Access="02" Security="00"/>
+   <Var Index="01" Name="CoolSetPoint"      Type="01" Access="02" Security="00"/>
+   <Var Index="02" Name="CoolSetPointChange" Type="01" Access="02" Security="00"/>
+   <Var Index="03" Name="HeatSetPoint"      Type="01" Access="02" Security="00"/>
+   <Var Index="04" Name="HeatSetPointChange" Type="01" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffea2"> <!-- Device Control -->
+   <Var Index="00" Name="Mode"              Type="04" Access="02" Security="00"/>
+   <Var Index="01" Name="SceneId"           Type="05" Access="02" Security="00"/>
+  </Mib>
+  <Mib ID="0xfffffea3"> <!-- Device Scene -->
+   <Var Index="00" Name="AddSceneId"        Type="05" Access="02" Security="00"/>
+   <Var Index="01" Name="DelSceneId"        Type="05" Access="02" Security="00"/>
+   <Var Index="02" Name="AddScene"          Type="11" Access="02" Security="00"/>
+   <Var Index="03" Name="SceneTable"        Type="75" Access="01" Security="00"/>
+  </Mib>
+ </MibIdCache>
+ <DeviceIdCache>
+  <Device ID="0x08010001">
+   <Mib ID="0xffffff00" Index="00" Name="Node"/>
+   <Mib ID="0xffffff01" Index="01" Name="JenNet"/>
+   <Mib ID="0xffffff02" Index="02" Name="Groups"/>
+   <Mib ID="0xffffff03" Index="03" Name="OND"/>
+   <Mib ID="0xffffff04" Index="04" Name="DeviceID"/>
+   <VarData MibID="0xffffff04" VarIndex="01" Size="02">0001</VarData>
+  </Device>
+  <Device ID="0x08010010">
+   <Mib ID="0xffffff00" Index="00" Name="Node"/>
+   <Mib ID="0xffffff02" Index="01" Name="Groups"/>
+   <Mib ID="0xffffff04" Index="02" Name="DeviceID"/>
+   <Mib ID="0xfffffd01" Index="03" Name="ControlBridge"/>
+   <VarData MibID="0xffffff04" VarIndex="01" Size="02">0002</VarData>
+  </Device>
+  <Device ID="0x08011175">
+   <Mib ID="0xffffff00" Index="00" Name="Node"/>
+   <Mib ID="0xffffff01" Index="01" Name="JenNet"/>
+   <Mib ID="0xffffff02" Index="02" Name="Groups"/>
+   <Mib ID="0xffffff03" Index="03" Name="OND"/>
+   <Mib ID="0xffffff04" Index="04" Name="DeviceID"/>
+   <Mib ID="0xfffffe80" Index="05" Name="NodeStatus"/>
+   <Mib ID="0xfffffe82" Index="06" Name="NodeControl"/>
+   <Mib ID="0xfffffe88" Index="07" Name="NwkStatus"/>
+   <Mib ID="0xfffffe8b" Index="08" Name="NwkSecurity"/>
+   <Mib ID="0xfffffe00" Index="09" Name="BulbStatus"/>
+   <Mib ID="0xfffffe03" Index="10" Name="BulbScene"/>
+   <Mib ID="0xfffffe04" Index="11" Name="BulbControl"/>
+   <Mib ID="0xfffffea3" Index="12" Name="DeviceScene"/>
+   <Mib ID="0xfffffea2" Index="13" Name="DeviceControl"/>
+   <VarData MibID="0xffffff04" VarIndex="01" Size="02">00E1</VarData>
+  </Device>
+  <Device ID="0x0801175C"> <!-- RGB bulb -->
+   <Mib ID="0xffffff00" Index="00" Name="Node"/>
+   <Mib ID="0xffffff01" Index="01" Name="JenNet"/>
+   <Mib ID="0xffffff02" Index="02" Name="Groups"/>
+   <Mib ID="0xffffff03" Index="03" Name="OND"/>
+   <Mib ID="0xffffff04" Index="04" Name="DeviceID"/>
+   <Mib ID="0xfffffe80" Index="05" Name="NodeStatus"/>
+   <Mib ID="0xfffffe82" Index="06" Name="NodeControl"/>
+   <Mib ID="0xfffffe88" Index="07" Name="NwkStatus"/>
+   <Mib ID="0xfffffe8b" Index="08" Name="NwkSecurity"/>
+   <Mib ID="0xfffffe01" Index="09" Name="BulbConfig"/>
+   <Mib ID="0xfffffe00" Index="10" Name="BulbStatus"/>
+   <Mib ID="0xfffffe03" Index="11" Name="BulbScene"/>
+   <Mib ID="0xfffffe04" Index="12" Name="BulbControl"/>
+   <Mib ID="0xfffffe09" Index="13" Name="ColourConfig"/>
+   <Mib ID="0xfffffe0c" Index="14" Name="ColourControl"/>
+   <Mib ID="0xfffffea3" Index="15" Name="DeviceScene"/>
+   <Mib ID="0xfffffea2" Index="16" Name="DeviceControl"/>
+   <VarData MibID="0xffffff04" VarIndex="01" Size="02">00F3</VarData>
+  </Device>
+  <Device ID="0x0801175B"> <!-- CCTW bulb -->
+   <Mib ID="0xffffff00" Index="00" Name="Node"/>
+   <Mib ID="0xffffff01" Index="01" Name="JenNet"/>
+   <Mib ID="0xffffff02" Index="02" Name="Groups"/>
+   <Mib ID="0xffffff03" Index="03" Name="OND"/>
+   <Mib ID="0xffffff04" Index="04" Name="DeviceID"/>
+   <Mib ID="0xfffffe80" Index="05" Name="NodeStatus"/>
+   <Mib ID="0xfffffe82" Index="06" Name="NodeControl"/>
+   <Mib ID="0xfffffe88" Index="07" Name="NwkStatus"/>
+   <Mib ID="0xfffffe8b" Index="08" Name="NwkSecurity"/>
+   <Mib ID="0xfffffe01" Index="09" Name="BulbConfig"/>
+   <Mib ID="0xfffffe00" Index="10" Name="BulbStatus"/>
+   <Mib ID="0xfffffe03" Index="11" Name="BulbScene"/>
+   <Mib ID="0xfffffe04" Index="12" Name="BulbControl"/>
+   <Mib ID="0xfffffe09" Index="13" Name="ColourConfig"/>
+   <Mib ID="0xfffffe0c" Index="14" Name="ColourControl"/>
+   <Mib ID="0xfffffea3" Index="15" Name="DeviceScene"/>
+   <Mib ID="0xfffffea2" Index="16" Name="DeviceControl"/>
+   <VarData MibID="0xffffff04" VarIndex="01" Size="02">00F2</VarData>
+  </Device>
+  <Device ID="0x08014001">
+   <Mib ID="0xffffff00" Index="00" Name="Node"/>
+   <Mib ID="0xffffff01" Index="01" Name="JenNet"/>
+   <Mib ID="0xffffff02" Index="02" Name="Groups"/>
+   <Mib ID="0xffffff03" Index="03" Name="OND"/>
+   <Mib ID="0xffffff04" Index="04" Name="DeviceID"/>
+   <Mib ID="0xfffffe80" Index="05" Name="NodeStatus"/>
+   <Mib ID="0xfffffe82" Index="06" Name="NodeControl"/>
+   <Mib ID="0xfffffe88" Index="07" Name="NwkStatus"/>
+   <Mib ID="0xfffffe8b" Index="08" Name="NwkSecurity"/>
+   <Mib ID="0xfffffe50" Index="09" Name="ThermostatStatus"/>
+   <Mib ID="0xfffffe51" Index="10" Name="ThermostatControl"/>
+   <VarData MibID="0xffffff04" VarIndex="01" Size="02">00B0</VarData>
+  </Device>
+ </DeviceIdCache>
+</JIP_Cache>

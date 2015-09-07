@@ -1,0 +1,5 @@
+
+# Nodes that are allowed to join the network by the radius server are added in here
+# Entries are as follows:
+# <MAC_ADDRESS> Cleartext-Password := "<MAC_ADDRESS>"
+#          Vendor-Specific = "0x00006DE96412<128 bit commisioning key>"

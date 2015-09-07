@@ -1,0 +1,13 @@
+Index: backfire/include/version.mk
+===================================================================
+--- a/include/version.mk	(revision 35400)
++++ b/include/version.mk	(working copy)
+@@ -26,7 +26,7 @@
+ VERSION_REPO:=$(call qstrip,$(CONFIG_VERSION_REPO))
+ VERSION_REPO:=$(if $(VERSION_REPO),$(VERSION_REPO),http://downloads.openwrt.org/attitude_adjustment/12.09-rc1/%S/packages)
+ 
+-VERSION_DIST:=$(call qstrip,$(CONFIG_VERSION_DIST))
++VERSION_DIST:=$(shell echo "NXP IoT Gateway ("`svnversion $(TOPDIR)/../../../`")")
+ VERSION_DIST:=$(if $(VERSION_DIST),$(VERSION_DIST),OpenWrt)
+ 
+ VERSION_SED:=$(SED) 's,%U,$(VERSION_REPO),g' \

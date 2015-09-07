@@ -1,0 +1,522 @@
+<%#
+LuCI - Lua Configuration Interface
+Copyright 2008 Steven Barth <steven@midlink.org>
+Copyright 2008-2009 Jo-Philipp Wich <xm@subsignal.org>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+$Id: upgrade.htm 5458 2009-10-31 20:03:27Z jow $
+
+-%>
+
+<%-
+    local w = require "luci.tools.webadmin"
+    local success, err = ""
+    local version = 0
+    local firmwares = {}
+    local node_status = {}
+
+    success, err = pcall(require, 'FWDistribution')
+
+    if success then
+        success, err = pcall(FWDistribution.version)
+        if success then
+            version = err
+
+            if luci.http.formvalue("control") == "status" then
+                success, err = pcall(FWDistribution.status)
+                if success then
+                    luci.http.prepare_content("application/json")
+                    local info = { node_status= err}
+                    luci.http.write_json(info)
+                    return
+                end
+            else
+                success, err = pcall(FWDistribution.available)
+                if success then
+                    firmwares = err
+                end
+            end
+
+        end
+    else
+        if luci.http.formvalue("control") == "status" then
+            luci.http.prepare_content("application/json")
+            luci.http.write_json({})
+            return
+        end
+    end
+
+    function backticks_table(cmd)
+        local tab = {}
+        local pipe = assert(io.popen(cmd),
+            "backticks_table(" .. cmd .. ") failed.")
+        local line = pipe:read("*line")
+        while line do
+            table.insert(tab, line)
+            line = pipe:read("*line")
+        end
+        return tab
+    end
+
+    if not (luci.http.formvalue("control") == "status") then
+        -- Get list of available coordinators from avahi
+        coordinators = backticks_table("avahi-browse -r -p -t _jip._udp | awk ' BEGIN { FS = \";\" } ;/=/ { print $8 }' -")
+    end
+
+-%>
+
+<%+header%>
+
+<!-- Select files tab by default -->
+<%- selected_tab = luci.http.formvalue("tab.FW") %>
+<%- if not selected_tab then selected_tab = "tab.FW.Files" end %>
+
+<div class="cbi-map" id="cbi-FW">
+<h2><a id="content" name="content">Firmware Tools</a></h2>
+<div class="cbi-map-descr">Tools to distribute firmware to nodes in a JenNet-IP network</div>
+
+<script type="text/javascript" src="/luci-static/resources/cbi.js"></script>
+
+
+<script type="text/javascript" src="<%=resource%>/cbi.js"></script>
+<script type="text/javascript">//<![CDATA[
+
+    function progressbar(v, m)
+    {
+        var vn = parseFloat(v) || 0.0;
+        var mn = parseFloat(m) || 100.0;
+        var pc = Math.ceil((100.0 / mn) * vn);
+
+        return String.format(
+            '<div style="width:200px; position:relative; margin-left: auto; margin-right: auto; border:1px solid #999999">' +
+                '<div style="background-color:#CCCCCC; width:%d%%; height:15px">' +
+                    '<div style="position:absolute; left:0; top:0; text-align:center; width:100%%; color:#000000">' +
+                        '<small>%s / %s (%d%%)</small>' +
+                    '</div>' +
+                '</div>' +
+            '</div>', pc, v, m, pc
+        );
+    }
+
+    var iwxhr = new XHR();
+
+    var update_status = function() {
+        iwxhr.get('<%=REQUEST_URI%>', { control: "status", coord_addr : "<%=Address%>"},
+            function(x, info)
+            {
+
+                var ls = document.getElementById('node_status_table');
+                if (ls)
+                {
+                    /* clear all rows */
+                    while( ls.rows.length > 1 )
+                        ls.rows[0].parentNode.deleteRow(1);
+
+                    for( var i = 0; i < info.node_status.length; i++ )
+                    {
+                        var tr = ls.rows[0].parentNode.insertRow(-1);
+                            tr.className = 'cbi-section-table-row cbi-rowstyle-' + ((i % 2) + 1);
+
+                        tr.insertCell(-1).innerHTML = info.node_status[i].Coordinator;
+                        var s = info.node_status[i].DeviceID.toString(16);
+                        tr.insertCell(-1).innerHTML = "0x00000000".substr(0, 10 - s.length) + s;
+                        tr.insertCell(-1).innerHTML = info.node_status[i].MAC;
+                        tr.insertCell(-1).innerHTML = progressbar(
+                            (info.node_status[i].TotalBlocks - info.node_status[i].RemainingBlocks),
+                            info.node_status[i].TotalBlocks);
+                        tr.insertCell(-1).innerHTML =
+                            "<form method=\"post\" action=\"<%=REQUEST_URI%>\" enctype=\"multipart/form-data\"> \
+                            <input type=\"hidden\" name=\"tab.FW\" value=\"tab.FW.Status\" /> \
+                            <input type=\"hidden\" name=\"control\" value=\"cancel\" /> \
+                            <input type=\"hidden\" name=\"coord_addr\" value=\"" + info.node_status[i].Coordinator + "\" /> \
+                            <input type=\"hidden\" name=\"DeviceID\"   value=\"" + info.node_status[i].DeviceID + "\" /> \
+                            <input type=\"hidden\" name=\"ChipType\"   value=\"" + info.node_status[i].ChipType + "\" /> \
+                            <input type=\"hidden\" name=\"Revision\"   value=\"" + info.node_status[i].Revision + "\" /> \
+                            <input class=\"cbi-input-reset\" type=\"submit\" \
+                            value=\"Cancel\"/></form>"
+                    }
+
+                    if( ls.rows.length == 1 )
+                    {
+                        var tr = ls.rows[0].parentNode.insertRow(-1);
+                            tr.className = 'cbi-section-table-row';
+
+                        var td = tr.insertCell(-1);
+                            td.colSpan = 5;
+                            td.innerHTML = '<em><br /><%:There are no active downloads.%></em>';
+                    }
+                }
+
+                window.setTimeout(update_status, 1500);
+            }
+        )
+    };
+
+    update_status();
+
+
+// Add a Javascript validator for the DeviceID field.
+cbi_validators['DeviceID'] = function(v)
+{
+    return ((v.length == 10) && (v.match(/^0x[a-fA-F0-9]+$/) != null));
+}
+
+
+// Add a Javascript validator for the firmware selection field.
+function validate_fw_start(form)
+{
+    // Validate the firmware selection first.
+    var firmware_select = document.getElementById("firmware_select");
+    var num_selected = 0;
+
+    // Iterate rows, skipping heading row.
+    for (var i = 1, row; row = firmware_select.rows[i]; i++) 
+    {
+        var select_button = row.cells[4].childNodes[0];
+        if (select_button.checked)
+        {
+            num_selected++;
+        } 
+    }
+
+    if (num_selected == 0)
+    {
+        alert ("Please select an image to distribute first!");    
+        return false;
+    }
+
+    // Finally, validate the rest of the form.
+    return cbi_validate_form(form, 'Some fields are invalid, cannot start distribution!');
+}
+
+//]]></script>
+
+<fieldset class="cbi-section">
+<legend>Firmware Distribution Tools</legend>
+
+<ul class="cbi-tabmenu">
+    <script type="text/javascript">cbi_c['container.FW.Files'] = 2;</script>
+    <li id="tab.FW.Files" class="cbi-tab<%=('tab.FW.Files' == selected_tab) and '' or '-disabled'%>">
+        <a onclick="this.blur(); return cbi_t_switch('FW', 'Files')" href="<%=REQUEST_URI%>?tab.FW=Files">Files</a>
+        <input type="hidden" id="tab.FW" name="tab.FW" value="Files" />
+    </li>
+
+    <script type="text/javascript">cbi_c['container.FW.Start'] = 4;</script>
+    <li id="tab.FW.Start" class="cbi-tab<%=('tab.FW.Start' == selected_tab) and '' or '-disabled'%>">
+        <a onclick="this.blur(); return cbi_t_switch('FW', 'Start')" href="<%=REQUEST_URI%>?tab.FW=Start">Start</a>
+        <input type="hidden" id="tab.FW" name="tab.FW" value="Start" />
+    </li>
+
+    <script type="text/javascript">cbi_c['container.FW.Status'] = 6;</script>
+    <li id="tab.FW.Status" class="cbi-tab<%=('tab.FW.Status' == selected_tab) and '' or '-disabled'%>">
+        <a onclick="this.blur(); return cbi_t_switch('FW', 'Status')" href="<%=REQUEST_URI%>?tab.FW=Status">Status</a>
+        <input type="hidden" id="tab.FW" name="tab.FW" value="Status" />
+    </li>
+
+    <script type="text/javascript">cbi_c['container.FW.Reset'] = 8;</script>
+    <li id="tab.FW.Reset" class="cbi-tab<%=('tab.FW.Reset' == selected_tab) and '' or '-disabled'%>">
+        <a onclick="this.blur(); return cbi_t_switch('FW', 'Reset')" href="<%=REQUEST_URI%>?tab.FW=Reset">Reset</a>
+        <input type="hidden" id="tab.FW" name="tab.FW" value="Reset" />
+    </li>
+</ul>
+
+<div class="cbi-section-node">
+
+<!--  Manage files tab  -->
+
+<div class="cbi-tabcontainer" id="container.FW.Files" <%=('tab.FW.Files' == selected_tab) and '' or 'style="display:none"'%>>
+<br />
+<fieldset class="cbi-section">
+    <legend>Add new firmware</legend>
+    <p>
+    Upload a new firmware image for distribution to the JenNet-IP wireless network.
+    </p>
+
+    <form method="post" action="<%=REQUEST_URI%>" enctype="multipart/form-data">
+    <div>
+        <br />
+        <%:Firmware image%>:<br />
+        <input type="hidden" name="control" value="upload" />
+        <input type="file" size="30" name="image" />
+        <br />
+    </div>
+    <div>
+        <input class="cbi-button cbi-button-apply" type="submit" value="<%:Upload new firmware%>" />
+    </div>
+</form>
+</fieldset>
+</div>
+<script type="text/javascript">cbi_t_add('FW', 'Files')</script>
+
+
+
+<!--  Start download tab  -->
+
+<div class="cbi-tabcontainer" id="container.FW.Start" <%=('tab.FW.Start' == selected_tab) and '' or 'style="display:none"'%>>
+<br />
+<fieldset class="cbi-section">
+    <legend>Start Distribution</legend>
+
+    <form method="post" action="<%=REQUEST_URI%>" enctype="multipart/form-data" onsubmit="return validate_fw_start(this)">
+    <p>
+    Start distribution of a firmware image to nodes in the JenNet-IP wireless network
+    </p>
+
+    <fieldset class="cbi-section">
+        <legend>Firmware Available to Download</legend>
+        <table width="100%" id="firmware_select">
+        <tr><th>Filename</th><th>DeviceID</th><th>Chip Type</th><th>Revision</th><th>Distribute</th></tr>
+        <% for _,value in pairs(firmwares) do%>
+            <tr>
+
+                <td align="center"><%write(value.Filename)%></td>
+                <td align="center"><%write(string.format("0x%08x", value.DeviceID))%></td>
+                <td align="center"><%write(string.format("0x%04x", value.ChipType))%></td>
+                <td align="center"><%write(string.format("0x%04x", value.Revision))%></td>
+                <td align="center"><input type="radio" name="firmware" value=<% write(string.format("\"0x%08x-0x%04x-0x%04x\"", value.DeviceID, value.ChipType, value.Revision)) %> class="cbi-input-radio" onclick="cbi_d_update(this.id)" onchange="cbi_d_update(this.id)"/></td>
+            </tr>
+        <% end %>
+        </table>
+    </fieldset>
+    <div>
+        <div class="cbi-value"><label class="cbi-value-title">Coordinator IPv6 address</label>
+            <div class="cbi-value-field">
+                <select name="coord_addr">
+                <%for k, v in ipairs(coordinators, k) do %>
+                        <option value="<%write(v)%>"><%write(v)%></option>
+                <% end %>
+                </select>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    IPv6 address of network coordinator that should download the image.
+                </div>
+            </div>
+        </div>
+
+        <div class="cbi-value"><label class="cbi-value-title">Inform only</label>
+            <div class="cbi-value-field">
+                <input type="checkbox" name="inform" id="FWD.Inform" onclick="cbi_d_update(this.id)" value="1"/>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    Select this to make the firmware available to nodes in the network, but not actually start a pushed distribution.
+                    This is primarily useful for end devices that must pull a firmware image.
+                </div>
+            </div>
+        </div>
+
+        <div class="cbi-value" id="FWD.BlockInterval"><label class="cbi-value-title">OND Broadcast block interval</label>
+            <div class="cbi-value-field">
+                <select name="block_interval">
+                    <option value="100" selected="selected">Small Network (1 second)</option>
+                    <option value="300">Medium Network (3 seconds)</option>
+                    <option value="500">Large Network (5 seconds)</option>
+                </select>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    Use this control to vary the speed of broadcast of an image to the network. 
+                    The default is 1 second between blocks, which is ok for small networks but should be increased for larger networks.
+                </div>
+            </div>
+        </div>
+
+        <script type="text/javascript" id="FWD.BlockIntervalScript">
+            cbi_d_add("FWD.BlockInterval", {"FWD.Inform":""}, "FWD.BlockIntervalScript");
+        </script>
+
+        <div class="cbi-value" id="FWD.Reset"><label class="cbi-value-title">Automatic reset of nodes</label>
+            <div class="cbi-value-field">
+                <input type="checkbox" name="reset" />
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    Nodes should reset automatically once whole image has successfully downloaded.
+                </div>
+            </div>
+        </div>
+
+        <script type="text/javascript" id="FWD.ResetScript">
+            cbi_d_add("FWD.Reset", {"FWD.Inform":""}, "FWD.ResetScript");
+        </script>
+
+
+        <br />
+        <input type="hidden" name="control" value="start" />
+        <input class="cbi-button cbi-button-apply" type="submit" value="<%:Begin Distribution%>" />
+        <script type="text/javascript">cbi_d_update();</script>
+    </div>
+    </form>
+</fieldset>
+
+</div>
+<script type="text/javascript">cbi_t_add('FW', 'Start')</script>
+
+
+<!--  Status tab   -->
+
+<div class="cbi-tabcontainer" id="container.FW.Status" <%=('tab.FW.Status' == selected_tab) and '' or 'style="display:none"'%>>
+<br />
+<fieldset class="cbi-section">
+    <legend>Distribution Status</legend>
+
+<table class="cbi-section-table" id="node_status_table">
+    <tr class="cbi-section-table-titles">
+        <th class="cbi-section-table-cell"><%:Coordinator%></th>
+        <th class="cbi-section-table-cell"><%:Device ID%></th>
+        <th class="cbi-section-table-cell"><%:MAC Address%></th>
+        <th class="cbi-section-table-cell"><%:Progress%></th>
+        <th class="cbi-section-table-cell"></th>
+    </tr>
+    <tr class="cbi-section-table-row">
+        <td colspan="1"><em><br />There are no active downloads.</em></td>
+    </tr>
+</table>
+</fieldset>
+
+</div>
+<script type="text/javascript">cbi_t_add('FW', 'Status')</script>
+
+
+<!--  Reset tab  -->
+
+<div class="cbi-tabcontainer" id="container.FW.Reset" <%=('tab.FW.Reset' == selected_tab) and '' or 'style="display:none"'%>>
+<br />
+<fieldset class="cbi-section">
+    <legend>Reset Nodes</legend>
+
+    <form method="post" action="<%=REQUEST_URI%>" enctype="multipart/form-data" onsubmit="return cbi_validate_form(this, 'Some fields are invalid, cannot perform reset!')">
+    <p>
+    Reset devices within the JenNet-IP wireless network
+    </p>
+
+    <fieldset class="cbi-section">
+        <legend>Required Parameters</legend>
+        <div class="cbi-value"><label class="cbi-value-title">Target DeviceID</label>
+            <div class="cbi-value-field">
+                <input class="cbi-input-text" onchange="cbi_d_update(this.id)" name="DeviceID" id="DeviceID" value="0xFFFFFFFF" />
+                <script type="text/javascript">
+                    cbi_validate_field('DeviceID', true, 'DeviceID');
+                </script>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    All devices matching this 32bit device ID will be requested to reset. 0xFFFFFFFF can be used to specify all device IDs.
+                </div>
+            </div>
+        </div>
+
+
+        <div class="cbi-value"><label class="cbi-value-title">Coordinator IPv6 Address</label>
+            <div class="cbi-value-field">
+                <select name="coord_addr">
+                <%for k, v in ipairs(coordinators, k) do %>
+                        <option value="<%write(v)%>"><%write(v)%></option>
+                <% end %>
+                </select>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    IPv6 address of network coordinator that should send the reset request.
+                </div>
+            </div>
+        </div>
+    </fieldset>
+
+    <fieldset class="cbi-section">
+        <legend>Optional Reset Control</legend>
+
+        <div class="cbi-value"><label class="cbi-value-title">Time before reset</label>
+            <div class="cbi-value-field">
+                <input type="text" name="Timeout" id="Timeout" />
+                <script type="text/javascript">
+                    cbi_validate_field('Timeout', true, 'uinteger');
+                </script>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    Number of milliseconds that the device should wait before resetting.
+                </div>
+            </div>
+        </div>
+
+        <div class="cbi-value"><label class="cbi-value-title">Depth Influence</label>
+            <div class="cbi-value-field">
+                <input type="text" name="DepthInfluence" id="DepthInfluence" />
+                <script type="text/javascript">
+                    cbi_validate_field('DepthInfluence', true, 'uinteger');
+                </script>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    How much extra device deeper in the network should wait before resetting (Number of milliseconds per layer in the tree).
+                </div>
+            </div>
+        </div>
+
+        <div class="cbi-value"><label class="cbi-value-title">Repeat Count</label>
+            <div class="cbi-value-field">
+                <input type="text" name="RepeatCount" id="RepeatCount" />
+                <script type="text/javascript">
+                    cbi_validate_field('RepeatCount', true, 'uinteger');
+                </script>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    How many times the request to reset should be repeated.
+                </div>
+            </div>
+        </div>
+
+        <div class="cbi-value"><label class="cbi-value-title">Repeat Time</label>
+            <div class="cbi-value-field">
+                <input type="text" name="RepeatTime" id="RepeatTime" />
+                <script type="text/javascript">
+                    cbi_validate_field('RepeatTime', true, 'uinteger');
+                </script>
+                <br />
+                <div class="cbi-value-description">
+                    <span class="cbi-value-helpicon"><img src="/luci-static/resources/cbi/help.gif" alt="help" /></span>
+                    How many milliseconds to wait between each repeat of the request.
+                </div>
+            </div>
+        </div>
+
+    </fieldset>
+
+    <div class="cbi-page-actions">
+        <input type="hidden" name="control" value="reset" />
+        <input class="cbi-button cbi-button-apply" type="submit" value="<%:Reset Nodes%>" />
+        <script type="text/javascript">cbi_d_update();</script>
+    </div>
+
+    </form>
+</fieldset>
+
+</div>
+<script type="text/javascript">cbi_t_add('FW', 'Reset')</script>
+
+
+</div>
+</fieldset>
+
+</div>
+
+<% if (Status) then %>
+<fieldset class="cbi-section">
+<legend>Status</legend>
+    <%=Status%>
+</fieldset>
+<% end %>
+
+<br />
+<br />
+<%:Firmware distribution daemon version%> <%=version%>
+<%+footer%>
+

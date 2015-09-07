@@ -1,0 +1,370 @@
+<!DOCTYPE HTML>
+<HTML><HEAD><TITLE>
+JenNet-IP Browser
+</TITLE>
+<link rel="stylesheet" href="/style.css" type="text/css" media="screen" />
+
+<script src="/js/jquery.min.js"></script>
+<script src="/js/jquery.history.js"></script>
+<script src="/js/SimpleSlider.js"></script>
+<script src="/js/JIP.js"></script>
+<script src="/js/flot-flot-f0e78fc/jquery.flot.js"></script>
+<script type="text/javascript"> 
+
+/****************************************************************************
+ *
+ * MODULE:             JIP Web Apps
+ *
+ * COMPONENT:          JIP Smart Devices control web interface
+ *
+ * REVISION:           $Revision: 43426 $
+ *
+ * DATED:              $Date: 2012-06-18 15:24:02 +0100 (Mon, 18 Jun 2012) $
+ *
+ * AUTHOR:             Matt Redfearn
+ *
+ ****************************************************************************
+ *
+ * This software is owned by NXP B.V. and/or its supplier and is protected
+ * under applicable copyright laws. All rights are reserved. We grant You,
+ * and any third parties, a license to use this software solely and
+ * exclusively on NXP products [NXP Microcontrollers such as JN5148, JN5142, JN5139]. 
+ * You, and any third parties must reproduce the copyright and warranty notice
+ * and any other legend of ownership on each copy or partial copy of the 
+ * software.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+
+ * Copyright NXP B.V. 2012. All rights reserved
+ *
+ ***************************************************************************/
+
+history_length = 20;
+
+graphs = [];
+
+
+function graph_update(Status, graph, value)
+{
+    if (Status.Value != 0)
+    {
+        $("#result").html("Failed to read variable: " + Status.Description);
+        return;
+    }
+
+    var newvalue=parseFloat(value);
+    if (isNaN(newvalue))
+    {
+        return;
+    }
+
+    // Apply data scaling factor
+    newvalue = newvalue * graph.scale;
+
+    graph.history.push(newvalue);
+    graph.history = graph.history.slice(graph.history.length - history_length, graph.history.length);
+
+    var d1 = [];
+    for (var i = 0; i < graph.history.length; i += 1) {
+        d1.push([i, graph.history[i]]);
+    }
+
+    $.plot(graph.canvas, [d1]);
+    graph.text.innerHTML = newvalue.toFixed(1) + " &degC";
+}
+
+
+function vVarUpdated(Status, str)
+{
+    $("#result").html(str + ": " + Status.Description);
+}
+
+
+function vCreateGraphControl(div, name, IPv6Address, MIB, Var, Scale)
+{    
+    var newdiv = $("<div class='feedback_div'><h2>Name</h2><div class='feedback_graph'></div><h2></h2></div>").appendTo($(div));
+
+    var graph = { "canvas": newdiv.find('div')[0], "text": newdiv.find('h2')[1], "scale": Scale, "history": []};
+
+    for (var i = 0; i < history_length; i++)
+    {
+        graph.history[i] = 0;
+    }
+
+    window.setInterval(function()
+    {
+        JIP_GetVar(IPv6Address, MIB, Var, graph_update, graph);
+    }, 1000);
+
+    return newdiv;
+}
+
+
+function vDisplayNodeName(Status, element, name)
+{
+    if (Status.Value == 0)
+    {
+        // Make sure the node has a valid name string
+        if (name != "")
+        {
+            // Set content to name
+            element.text(name);
+        }
+    }
+    else
+    {
+        $("#result").html("Failed to read name of node");
+    }
+}
+
+
+function vDisplayTemperature(Status)
+{
+    $("#Temperature").empty()
+ 
+    if (Status.Value == 0)
+    {
+        for (var nodeidx in Network.Nodes)
+        {
+            var ReadName = false;
+            
+            // Identify Environment Sensor Devices in the network
+            if ($.inArray(Network.Nodes[nodeidx].DeviceID,
+                // Array of Environment Sesnor Device IDs
+                [-2146391382, 0x8010aaaa]
+            ) >= 0)
+            {
+                // Create lamp control for this device
+                var LampControl = vCreateGraphControl("#Temperature", Network.Nodes[nodeidx].IPv6Address, Network.Nodes[nodeidx].IPv6Address, 
+                                                     "Environment", "Temperature", 0.1);
+                ReadName = true;
+            }
+
+            // And trigger a read of the device name.
+            if (ReadName)
+            {
+                JIP_GetVar(Network.Nodes[nodeidx].IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, LampControl.find('h2').eq(0)); 
+                
+                // Also bind a click event to the naem so that it can be clicked on to re-read the name.
+                $(LampControl).find('h2').bind('click', 
+                {
+                    IPv6Address: Network.Nodes[nodeidx].IPv6Address
+                }, 
+                function(event) {
+                    JIP_GetVar(event.data.IPv6Address, "Node", "DescriptiveName", vDisplayNodeName, LampControl.find('h2').eq(0)); 
+                });
+            }
+        }
+    }
+    else
+    {
+        newnode = $(document.createElement("div"));
+        newnode.html("Failed to discover network: " + Status.Description);
+        $("#Temperature").append(newnode);
+    }
+    positionFooter();
+}
+
+
+// Trigger state change
+function vBorderRouterSelectedEvent(event)
+{
+    ActiveBorderRouter = event.data.BR;
+    History.pushState({state:"Temperature", BR:ActiveBorderRouter}, 
+                      "Temperature Control", 
+                      "?state=Temperature&BR=" + event.data.BR);
+    
+    // When a border router has been selected, enable the other nav buttons, removing any old evetns first
+    vEnableMenu(ActiveBorderRouter);
+}
+
+
+function vEnableMenu(ActiveBorderRouter)
+{
+    $('#navTemperature').unbind('click').click(
+        function() 
+        {
+            //alert("Temperature click, Border router: " + ActiveBorderRouter);
+            History.pushState({state:"Temperature", BR:ActiveBorderRouter}, "Temperature Control", "?state=Temperature&BR=" + ActiveBorderRouter);
+        }
+    );
+}
+
+
+function vDisplayBRs(Status)
+{
+    $("#BRList").empty().append("<H2>Available Border Routers</H2><HR/>");
+ 
+    if (Status.Value == 0)
+    {
+        for (var bridx in BRList)
+        {
+            newbr = $(document.createElement("a"));
+            newbr.click({BR:BRList[bridx]}, vBorderRouterSelectedEvent);
+            newbr.html("<H2>" + BRList[bridx] + "</H2>");
+            $("#BRList").append(newbr);
+            $("#BRList").append("<br/>");
+        }
+    }
+    else
+    {
+        newbr = $(document.createElement("div"));
+        newbr.html("Failed to discover Border Router addresses: " + Status.Description);
+        $("#BRList").append(newbr);
+    }
+    positionFooter();
+}
+
+
+function vHandleState(){
+    var State = History.getState();
+    
+    //alert("State changed to " + State.data.state);
+    
+    $("#result").empty();
+    
+    if (State.data.state == "BRList")
+    {
+        //alert("Display available border routers");
+        $('#navBRList').addClass("selected");
+        $('#navTemperature').removeClass("selected");
+
+        $(".scroll_container").animate({"left": -($("#BRList").position().left)}, 400);
+        
+        JIP_DiscoverBRs(vDisplayBRs);
+    }
+    else if (State.data.state == "Temperature")
+    {
+        //alert("Display Temperature controls ");
+        JIP_Discover(vDisplayTemperature, State.data.BR);
+        $('#navBRList').removeClass("selected");
+        $('#navTemperature').addClass("selected");
+
+        $(".scroll_container").animate({"left": -($("#Temperature").position().left)}, 400);
+    }
+    positionFooter();
+}
+
+
+$(document).ready(function(){
+    // Prepare
+    var History = window.History;
+        State = History.getState(),
+        $log = $('#result');
+        
+    if ( !History.enabled ) {
+         // History.js is disabled for this browser.
+        return false;
+    }
+    
+    // Set up menu
+    $('#navBRList').click(
+        function() 
+        {
+            History.pushState({state:"BRList"}, "Available Border Routers", "?state=BRList");
+        }
+    );
+
+    // Bind to StateChange Event
+    History.Adapter.bind(window,'statechange',vHandleState);
+    
+    // If this is the first page, go to BRList state.
+    if (State.data.state == undefined)
+    {
+        History.pushState({state:"BRList"}, "Available Border Routers", "?state=BRList");
+        vHandleState();
+    }
+    else
+    {
+        // Need to re-discover the network after a refresh
+        if (State.data.BR != undefined)
+        {
+            vEnableMenu(State.data.BR);
+        }
+        else
+        {
+            // Or display the list or BRs.
+            History.pushState({state:"BRList"}, "Available Border Routers", "?state=BRList");
+        }
+        vHandleState();
+    }
+
+    JIP_GetVersion(function (Result) {
+        if (Result.Status.Value == 0)
+        {
+            $("#footer").replaceWith("<div id=\"footer\">Home Sensors version 1.0 using JIPcgi version " + Result.Version.JIPcgi + " libJIP version " + Result.Version.libJIP + "</div>");
+        }
+    });
+    positionFooter(); 
+    
+    $(window)
+        .resize(positionFooter)
+});
+
+
+function positionFooter()
+{
+    var footerHeight = 0,
+    resultHeight = 0,
+    footerTop = 0,
+    resultTop = 0
+    $footer = $("#footer"), $result = $("#result");
+    
+    footerHeight = $footer.height();
+    resultHeight = $result.height();
+    
+    footerTop = ($(window).scrollTop()+$(window).height()-footerHeight)+"px";
+    resultTop = ($(window).scrollTop()+$(window).height()-footerHeight-footerHeight)+"px";
+
+    if ( ($(document.body).height()+footerHeight) < $(window).height()) {
+        $footer.css({
+            position: "absolute",
+            top: footerTop
+        })
+        $result.css({
+            position: "absolute",
+            top: resultTop
+        })
+    } else {
+        $footer.css({
+            position: "static"
+        })
+        $result.css({
+            position: "static"
+        })
+    }
+}
+
+</script>
+    
+</HEAD><body><div id="container" >
+<div id="header"><div style="float: left;"><H1>NXP JenNet-IP Home Sensors</H1></div><div style="float: right;"><img src="/img/NXP_logo.gif"></div></div>
+<div id="navigation"><ul>
+    <li id="navBRList">Border Routers</li>
+    <li id="navTemperature">Temperature Monitor</li>
+</ul></div>
+
+<div id="content">
+    <div class="scroll_container">
+        <div id="BRList" class="scroll">
+            <P style="margin-left: 10px; "><H2>Available Border Routers</H2></P><HR/>
+        </div>
+        <div id="Temperature" class="scroll">
+            <P style="margin-left: 10px; "><H2>Temperature Monitor</H2></P><HR/>
+        </div>
+    </div>
+</div>
+
+<div id="result"></div>
+<div id="footer">Smart Devices version 1.0</div>
+</div></body></HTML>

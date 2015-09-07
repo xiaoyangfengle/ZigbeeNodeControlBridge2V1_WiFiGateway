@@ -1,0 +1,102 @@
+diff --git a/common/cmd_nand.c b/common/cmd_nand.c
+index 11f9096..f915fb6 100644 (file)
+--- a/common/cmd_nand.c
++++ b/common/cmd_nand.c
+@@ -511,7 +511,7 @@ static int nand_load_image(cmd_tbl_t *cmdtp, nand_info_t *nand,
+ 	printf("\nLoading from %s, offset 0x%lx\n", nand->name, offset);
+ 
+ 	cnt = nand->writesize;
+-	r = nand_read(nand, offset, &cnt, (u_char *) addr);
++	r = nand_read_skip_bad(nand, offset, &cnt, (u_char *) addr);
+ 	if (r) {
+ 		puts("** Read error\n");
+ 		show_boot_progress (-56);
+ 		return 1;
+@@ -543,8 +543,7 @@ static int nand_load_image(cmd_tbl_t *cmdtp, nand_info_t *nand,
+ 	}
+ 	show_boot_progress (57);
+ 
+-	/* FIXME: skip bad blocks */
+-	r = nand_read(nand, offset, &cnt, (u_char *) addr);
++	r = nand_read_skip_bad(nand, offset, &cnt, (u_char *) addr);
+ 	if (r) {
+ 		puts("** Read error\n");
+ 		show_boot_progress (-58);
+         }
+diff --git a/drivers/mtd/nand/lpc32xx_nand.c b/drivers/mtd/nand/lpc32xx_nand.c
+index e6821eb..83af957 100644 (file)
+--- a/drivers/mtd/nand/lpc32xx_nand.c
++++ b/drivers/mtd/nand/lpc32xx_nand.c
+@@ -352,6 +352,41 @@ static void lpc32xx_write_buf(struct mtd_info *mtd, const u_char *buf, int len)
+        lpc32xx_nand_xfer(mtd, buf, len, 0);
+ }
+ 
++
++/**
++ * lpc32xx_correct_data - [NAND Interface] Detect and correct bit error(s)
++ * mtd:        MTD block structure
++ * dat:        raw data read from the chip
++ * read_ecc:   ECC from the chip
++ * calc_ecc:   the ECC calculated from raw data
++ *
++ * Detect and correct a 1 bit error for 256 byte block
++ *
++ */
++int lpc32xx_correct_data(struct mtd_info *mtd, u_char *dat,
++                     u_char *read_ecc, u_char *calc_ecc)
++{
++       uint8_t i, nb_ecc256;
++       int     ret1, ret2 = 0;
++       u_char  *r = read_ecc;
++       u_char  *c = calc_ecc;
++       uint16_t        data_offset = 0;
++
++       nb_ecc256 = (CONFIG_SYS_NAND_ECCSIZE == NAND_LARGE_BLOCK_PAGE_SIZE ? 8 : 2);
++
++       for( i = 0 ; i < nb_ecc256 ; i++ , r += 3, c += 3, data_offset += 256 )
++       {
++               ret1 = nand_correct_data(mtd, dat + data_offset, r, c);
++
++               if( ret1 < 0 )
++                       return -EBADMSG;
++               else
++                       ret2 += ret1;
++       }
++
++       return(ret2);
++}
++
+ /*
+  * lpc32xx_read_buf - [DEFAULT] read chip data into buffer
+  * mtd:        MTD device structure
+@@ -387,7 +387,7 @@ int board_nand_init(struct nand_chip *nand)
+ 		nand->ecc.layout = &lpc32xx_nand_oob_16;
+ 
+ 	nand->ecc.calculate = lpc32xx_ecc_calculate;
+-	nand->ecc.correct = nand_correct_data;
++	nand->ecc.correct = lpc32xx_correct_data;
+ 	nand->ecc.hwctl = lpc32xx_hwecc_enable;
+ 	nand->cmd_ctrl = lpc32xx_nand_hwcontrol;
+ 	nand->dev_ready = lpc32xx_nand_ready;
+diff --git a/drivers/mtd/nand/nand_util.c b/drivers/mtd/nand/nand_util.c
+index 6ba52b3..0912858 100644 (file)
+--- a/drivers/mtd/nand/nand_util.c
++++ b/drivers/mtd/nand/nand_util.c
+@@ -564,7 +564,7 @@ int nand_read_skip_bad(nand_info_t *nand, size_t offset, size_t *length,
+ 
+ 	if (len_incl_bad == *length) {
+ 		rval = nand_read (nand, offset, length, buffer);
+-		if (rval != 0)
++		if (rval != 0 && rval != -EUCLEAN)
+ 			printf ("NAND read from offset %zx failed %d\n",
+ 				offset, rval);
+ 
+@@ -588,7 +588,7 @@ int nand_read_skip_bad(nand_info_t *nand, size_t offset, size_t *length,
+ 			read_length = nand->erasesize - block_offset;
+ 
+ 		rval = nand_read (nand, offset, &read_length, p_buffer);
+-		if (rval != 0) {
++		if (rval != 0 && rval != -EUCLEAN) {
+ 			printf ("NAND read from offset %zx failed %d\n",
+ 				offset, rval);
+ 			*length -= left_to_read;

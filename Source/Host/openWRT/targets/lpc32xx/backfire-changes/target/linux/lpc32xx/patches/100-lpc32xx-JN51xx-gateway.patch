@@ -1,0 +1,533 @@
+diff --git a/arch/arm/mach-lpc32xx/Kconfig b/arch/arm/mach-lpc32xx/Kconfig
+index 0ba9736..07b3561 100644
+--- a/arch/arm/mach-lpc32xx/Kconfig
++++ b/arch/arm/mach-lpc32xx/Kconfig
+@@ -21,6 +21,11 @@ choice
+         help
+             Support for the Future Designs LPC3250 Touch screen kit
+ 
++    config MACH_JNRD6040
++        bool "NXP LPC3240 / JN5168 Gateway Reference Design JNRD6040"
++        help
++            Support for the NXP LPC3240 / JN5168 Gateway Reference Design JNRD6040
++
+ endchoice
+ 
+ 
+diff --git a/arch/arm/mach-lpc32xx/Makefile b/arch/arm/mach-lpc32xx/Makefile
+index e3d51b4..28e7450 100644
+--- a/arch/arm/mach-lpc32xx/Makefile
++++ b/arch/arm/mach-lpc32xx/Makefile
+@@ -7,3 +7,4 @@ obj-y  += dma.o pm.o suspend.o
+ obj-$(CONFIG_MACH_PHY3250)     += phy3250.o
+ obj-$(CONFIG_MACH_EA3250)      += ea3250.o
+ obj-$(CONFIG_MACH_FDI3250)     += fdi3250.o
++obj-$(CONFIG_MACH_JNRD6040)    += jnrd6040.o
+--- /dev/null	2013-03-18 08:13:05.840934888 +0000
++++ b/arch/arm/mach-lpc32xx/jnrd6040.c	2013-03-19 16:25:21.634279176 +0000
+@@ -0,0 +1,505 @@
++/*
++ * arch/arm/mach-lpc32xx/jnrd6040.c
++ *
++ * Copyright (C) 2012 NXP Semiconductors
++ * 
++ * Matt Redfearn matt.redfearn@nxp.com
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++#include <linux/init.h>
++#include <linux/platform_device.h>
++#include <linux/interrupt.h>
++#include <linux/irq.h>
++#include <linux/dma-mapping.h>
++#include <linux/device.h>
++#include <linux/delay.h>                                                                                            
++#include <linux/spi/spi.h>                                                                                          
++#include <linux/spi/eeprom.h>                                                                                       
++#include <linux/leds.h>                                                                                             
++#include <linux/gpio.h>    
++#include <linux/gpio_keys.h>
++#include <linux/input.h>                                                                                                                                                                               
++#include <linux/input.h>                                                                                            
++#include <linux/amba/bus.h>                                                                                         
++#include <linux/amba/pl022.h>                                                                                       
++#include <linux/amba/mmci.h>                                                                                        
++#include <mtd/mtd-abi.h>                                                                                            
++                        
++#include <asm/setup.h>                                                                                              
++#include <asm/mach-types.h>                                                                                         
++#include <asm/mach/arch.h>                                                                                          
++                                                                                                                    
++#include <mach/hardware.h>                                                                                          
++#include <mach/platform.h>                                                                                          
++#include <mach/board.h>                                                                                             
++#include "common.h"                                                                                                 
++                                                                                                                    
++#define I2C_24LC256_ADDR 0x50                                                                                       
++                                                                                                                    
++                                                                                                                    
++/* hardware debounce: (value + 1) * 31us */                                                                         
++#define GPIO_DEBOUNCE_TIME      127                                                                                 
++                                                                                                                    
++                                                                                                                    
++/*                                                                                                                  
++ * Mapped GPIOLIB GPIOs                                                                                             
++ */                                                                                                                 
++
++#define OEM_NAND_WP_GPIO    LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 19)
++
++#define JNRD6040_LED2       LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 14)
++#define JNRD6040_LED3       LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 1)
++#define JNRD6040_LED4       LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 2)
++#define JNRD6040_LED5       LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 3)
++
++#define JNRD6040_JN_RST     LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 4)
++#define JNRD6040_JN_PGM     LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 5)
++
++#define JNRD6040_BUTTON_1   LPC32XX_GPIO(LPC32XX_GPI_P3_GRP, 0)
++#define JNRD6040_BUTTON_2   LPC32XX_GPIO(LPC32XX_GPI_P3_GRP, 4)
++#define JNRD6040_EINT0      LPC32XX_GPIO(LPC32XX_GPI_P3_GRP, 1)
++#define JNRD6040_USB_OVRCNT LPC32XX_GPIO(LPC32XX_GPI_P3_GRP, 2)
++
++#define JNRD6040_EXT_6      LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 23)
++#define JNRD6040_EXT_8      LPC32XX_GPIO(LPC32XX_GPI_P3_GRP, 16)
++#define JNRD6040_EXT_12     LPC32XX_GPIO(LPC32XX_GPIO_P3_GRP, 1)
++
++
++/*
++ * LEDs
++ */
++static struct gpio_led jnrd6040_gpio_leds[] __initdata = {
++    {
++        .name               = "jnrd6040:yellow:A",
++        .gpio               = JNRD6040_LED2,
++        .active_low         = 0,
++        .default_trigger    = "none",
++    },
++    {
++        .name               = "jnrd6040:red:B",
++        .gpio               = JNRD6040_LED3,
++        .active_low         = 0,
++        .default_trigger    = "heartbeat",
++    },
++    {
++        .name               = "jnrd6040:green:C",
++        .gpio               = JNRD6040_LED4,
++        .active_low         = 1,
++        .default_trigger    = "none",
++    },
++    {
++        .name               = "jnrd6040:yellow:D",
++        .gpio               = JNRD6040_LED5,
++        .active_low         = 1,
++        .default_trigger    = "none",
++    },
++};
++
++static struct gpio_led_platform_data jnrd6040_gpio_leds_data = {
++    .leds = jnrd6040_gpio_leds,
++    .num_leds = ARRAY_SIZE(jnrd6040_gpio_leds),
++};
++
++static struct platform_device jnrd6040_gpio_leds_device = {
++    .name                   = "leds-gpio",
++    .id                     = -1,
++    .dev.platform_data      = &jnrd6040_gpio_leds_data,
++};
++
++static struct platform_device jnrd6040_jennic_device = {
++    .name                   = "jennic-module",
++    .id                     = -1,
++};
++
++static struct gpio_keys_button jnrd6040_gpio_keys[] = {
++	{
++		.desc		= "jnrd6040:btn:1",
++		.type		= EV_KEY,
++		.code		= BTN_1,
++		.debounce_interval = 20,
++		.gpio		= JNRD6040_BUTTON_1,
++		.active_low	= 1,
++		.wakeup		= 0,
++	},{
++		.desc		= "jnrd6040:btn:2",
++		.type		= EV_KEY,
++		.code		= BTN_2,
++		.debounce_interval = 20,
++		.gpio		= JNRD6040_BUTTON_2,
++		.active_low	= 1,
++		.wakeup		= 0,
++	},
++};
++
++static struct gpio_keys_platform_data jnrd6040_gpio_keys_data = {
++    .buttons        = jnrd6040_gpio_keys,
++    .nbuttons       = ARRAY_SIZE(jnrd6040_gpio_keys),
++    .poll_interval  = 50,
++};
++
++static struct platform_device jnrd6040_gpio_buttons_device = {
++    .name   = "gpio-keys-polled",
++    .id     = -1,
++    .dev    = {
++        .platform_data  = &jnrd6040_gpio_keys_data,
++    },
++};
++
++
++/*
++ * AMBA SSP (SPI)
++ */
++static struct pl022_ssp_controller lpc32xx_ssp0_data = {
++    .bus_id             = 0,
++    .num_chipselect     = 2,
++    .enable_dma         = 0,
++};
++
++static struct amba_device lpc32xx_ssp0_device = {
++    .dev    = {
++        .coherent_dma_mask  = ~0,
++        .init_name          = "dev:ssp0",
++        .platform_data      = &lpc32xx_ssp0_data,
++    },
++    .res    = {
++        .start              = LPC32XX_SSP0_BASE,
++        .end                = (LPC32XX_SSP0_BASE + SZ_4K - 1),
++        .flags              = IORESOURCE_MEM,
++    },
++    .dma_mask               = ~0,
++    .irq                    = {IRQ_LPC32XX_SSP0, NO_IRQ},
++};
++
++/* AMBA based devices list */
++static struct amba_device *amba_devs[] __initdata = {
++       &lpc32xx_ssp0_device,
++};
++
++/*
++ * Register AMBA BUS Devices.
++ * Call AMBA device restration after SPI driver probe(),
++ */
++static int __init ea3250_amba_devices_register(void)
++{
++    u32 i = 0;
++
++    /* Add AMBA devices */
++    for (i = 0; i < ARRAY_SIZE(amba_devs); i++) {
++        struct amba_device *d = amba_devs[i];
++        amba_device_register(d, &iomem_resource);
++    }
++
++    return 0;
++}
++device_initcall_sync(ea3250_amba_devices_register);
++
++#if defined(CONFIG_MTD_NAND_SLC_LPC32XX)
++/*
++ *  * Board specific NAND setup data
++ *   */
++static int nandwp_enable(int enable)
++{
++    if (enable != 0)
++    gpio_set_value(OEM_NAND_WP_GPIO,0);
++    else
++    gpio_set_value(OEM_NAND_WP_GPIO,1);
++
++    return 1;
++}
++#define BLK_SIZE (2048 * 64)
++static struct mtd_partition ea3250_nand_partition[] = {
++    {
++        .name   = "boot",
++        .offset = 0,
++        .size   = (BLK_SIZE * 4),
++        .mask_flags   = MTD_WRITEABLE,
++    },
++    {
++        .name   = "uboot",
++        .offset = MTDPART_OFS_APPEND,
++        .size   = (BLK_SIZE * 6),
++    },
++    {
++        .name   = "kernel",
++        .offset = MTDPART_OFS_APPEND,
++        .size   = (BLK_SIZE * 32)
++    },
++    {
++        .name   = "rootfs",
++        .offset = MTDPART_OFS_APPEND,
++        .size   = MTDPART_SIZ_FULL
++    },
++    {
++        /* Overlay openWRTs firmware partition over the kernl and rootfs */
++        .name   = "firmware",
++        .offset = 0x0140000,
++        .size   = 0x7EC0000,
++    }
++};
++
++
++static struct mtd_partition * ea3250_nand_partitions(int size, int *num_partitions)
++{
++    *num_partitions = ARRAY_SIZE(ea3250_nand_partition);
++    return ea3250_nand_partition;
++}
++
++
++struct lpc32XX_nand_cfg lpc32xx_nandcfg =
++{
++    .wdr_clks               = 14,
++    .wwidth                 = 260000000,
++    .whold                  = 104000000,
++    .wsetup                 = 200000000,
++    .rdr_clks               = 14,
++    .rwidth                 = 34666666,
++    .rhold                  = 104000000,
++    .rsetup                 = 200000000,
++    .use_bbt                = true,
++    .polled_completion      = false,
++    .enable_write_prot      = nandwp_enable,
++    .partition_info         = ea3250_nand_partitions,
++};
++
++/*
++ *  * SLC NAND resources
++ *   */
++static struct resource slc_nand_resources[] = {
++    [0] = {
++        .start  = LPC32XX_SLC_BASE,
++        .end    = LPC32XX_SLC_BASE + SZ_4K - 1,
++        .flags  = IORESOURCE_MEM,
++    },
++
++    [1] = {
++        .start  = IRQ_LPC32XX_FLASH,
++        .end    = IRQ_LPC32XX_FLASH,
++        .flags  = IORESOURCE_IRQ,
++    },
++};
++
++static u64 lpc32xx_slc_dma_mask = 0xffffffffUL;
++static struct platform_device lpc32xx_slc_nand_device = {
++    .name           = "lpc32xx-nand",
++    .id             = 0,
++    .dev            = {
++        .platform_data  = &lpc32xx_nandcfg,
++        .dma_mask    = &lpc32xx_slc_dma_mask,
++        .coherent_dma_mask = ~0UL,
++    },
++    .num_resources  = ARRAY_SIZE(slc_nand_resources),
++    .resource       = slc_nand_resources,
++};
++#endif
++
++/*
++ * Network Support
++ */
++static struct lpc_net_cfg lpc32xx_netdata =
++{
++    .phy_irq        = -1,
++    .phy_mask       = 0xFFFFFFF0,
++};
++
++static struct resource net_resources[] = {
++    [0] = {
++        .start  = LPC32XX_ETHERNET_BASE,
++        .end    = LPC32XX_ETHERNET_BASE + SZ_4K - 1,
++        .flags  = IORESOURCE_MEM,
++    },
++
++    [1] = {
++        .start  = IRQ_LPC32XX_ETHERNET,
++        .end    = IRQ_LPC32XX_ETHERNET,
++        .flags  = IORESOURCE_IRQ,
++    },
++};
++
++static u64 lpc32xx_mac_dma_mask = 0xffffffffUL;
++static struct platform_device lpc32xx_net_device = {
++    .name           = "lpc-net",
++    .id             = 0,
++    .dev            = {
++        .dma_mask = &lpc32xx_mac_dma_mask,
++        .coherent_dma_mask = 0xffffffffUL,
++        .platform_data  = &lpc32xx_netdata,
++    },
++    .num_resources  = ARRAY_SIZE(net_resources),
++    .resource       = net_resources,
++};
++
++/*
++ * I2C devices support
++ */
++#if 0
++#if defined (CONFIG_LEDS_PCA9532) || defined (CONFIG_AT24)
++       static struct i2c_board_info __initdata ea3250_i2c_board_info [] = {
++#if defined (CONFIG_LEDS_PCA9532)
++               {
++                       I2C_BOARD_INFO("pca9532", I2C_PCA9532_ADDR),
++                       .platform_data = &ea3250_leds,
++               },
++#endif
++#if defined (CONFIG_AT24)
++               {
++                       I2C_BOARD_INFO("24c256", I2C_24LC256_ADDR),
++               },
++#endif
++       };
++#endif
++#endif
++
++static struct platform_device* ea3250_devs[] __initdata = {
++    &lpc32xx_i2c0_device,
++    &lpc32xx_i2c1_device,
++    &lpc32xx_i2c2_device,
++    &lpc32xx_watchdog_device,
++    &lpc32xx_rtc_device,
++    &lpc32xx_net_device,
++    &jnrd6040_gpio_leds_device,
++    &jnrd6040_gpio_buttons_device,
++    &jnrd6040_jennic_device,
++#if defined(CONFIG_MTD_NAND_SLC_LPC32XX)
++    &lpc32xx_slc_nand_device,
++#endif
++#if defined(CONFIG_USB_OHCI_HCD)
++    &lpc32xx_ohci_device,
++#endif
++};
++
++/*
++ * Board specific functions
++ */
++void __init jnrd6040_board_init(void)
++{
++    u32 tmp;
++
++    /* Intiliase GPIO */
++    lpc32xx_gpio_init();
++
++    /* Take Port 2 GPIO from EMC. */
++    __raw_writel(1 << 3, LPC32XX_GPIO_P2_MUX_SET);
++    
++    /* Setup network interface for RMII mode */
++    tmp = __raw_readl(LPC32XX_CLKPWR_MACCLK_CTRL);
++    tmp &= ~LPC32XX_CLKPWR_MACCTRL_PINS_MSK;
++    tmp |= LPC32XX_CLKPWR_MACCTRL_USE_RMII_PINS;
++    __raw_writel(tmp, LPC32XX_CLKPWR_MACCLK_CTRL);
++
++    /* Setup SLC NAND controller */
++    __raw_writel(LPC32XX_CLKPWR_NANDCLK_SEL_SLC,
++                 LPC32XX_CLKPWR_NAND_CLK_CTRL);
++
++    /* Set up I2C pull levels */
++    tmp = __raw_readl(LPC32XX_CLKPWR_I2C_CLK_CTRL);
++    tmp |= LPC32XX_CLKPWR_I2CCLK_USBI2CHI_DRIVE |
++        LPC32XX_CLKPWR_I2CCLK_I2C2HI_DRIVE;
++    __raw_writel(tmp, LPC32XX_CLKPWR_I2C_CLK_CTRL);
++
++    /* Enable DMA for I2S1 channel */
++    tmp = __raw_readl(LPC32XX_CLKPWR_I2S_CLK_CTRL);
++    tmp = LPC32XX_CLKPWR_I2SCTRL_I2S1_USE_DMA;
++    __raw_writel(tmp, LPC32XX_CLKPWR_I2S_CLK_CTRL);
++
++    /* Initalise Serial device */
++    lpc32xx_serial_init();
++
++    /*
++        * AMBA peripheral clocks need to be enabled prior to AMBA device
++        * detection or a data fault will occur, so enable the clocks
++        * here. However, we don't want to enable them if the peripheral
++        * isn't included in the image
++        */
++    /* Initialise SSP clock */
++    tmp = __raw_readl(LPC32XX_CLKPWR_SSP_CLK_CTRL);
++    __raw_writel((tmp | LPC32XX_CLKPWR_SSPCTRL_SSPCLK0_EN),
++                 LPC32XX_CLKPWR_SSP_CLK_CTRL);
++
++    /* Enable SD card clock so AMBA driver will work correctly. The
++        AMBA driver needs the clock before the SD card controller
++        driver initializes it. The clock will turn off once the driver
++        has been initialized. */
++    tmp = __raw_readl(LPC32XX_CLKPWR_MS_CTRL);
++    tmp |= LPC32XX_CLKPWR_MSCARD_SDCARD_EN | LPC32XX_CLKPWR_MSCARD_MSDIO_PU_EN;
++    __raw_writel(tmp, LPC32XX_CLKPWR_MS_CTRL);
++
++    /* Disable UART5->USB transparent mode or USB won't work */
++    tmp = __raw_readl(LPC32XX_UARTCTL_CTRL);
++    tmp &= ~LPC32XX_UART_U5_ROUTE_TO_USB;
++    __raw_writel(tmp, LPC32XX_UARTCTL_CTRL);
++
++    /* Add platform devcies */
++    platform_add_devices(ea3250_devs, ARRAY_SIZE(ea3250_devs));
++
++    /* Test clock needed for UDA1380 initial init */
++    __raw_writel(LPC32XX_CLKPWR_TESTCLK2_SEL_MOSC |
++                 LPC32XX_CLKPWR_TESTCLK_TESTCLK2_EN,
++                 LPC32XX_CLKPWR_TEST_CLK_SEL);
++    
++    
++    /* Set up gpios for Jennic module */
++    gpio_request(JNRD6040_JN_RST, "jnrd6040:jn:rst");
++    gpio_direction_output(JNRD6040_JN_RST, 1);
++    gpio_export(JNRD6040_JN_RST, 0);
++    gpio_export_link(&jnrd6040_jennic_device.dev, "rst", JNRD6040_JN_RST);
++    
++    gpio_request(JNRD6040_JN_PGM, "jnrd6040:jn:pgm");
++    gpio_direction_output(JNRD6040_JN_PGM, 1);
++    gpio_export(JNRD6040_JN_PGM, 0);
++    gpio_export_link(&jnrd6040_jennic_device.dev, "pgm", JNRD6040_JN_PGM);
++
++    gpio_set_value(JNRD6040_JN_PGM, 1); // Run mode
++    gpio_set_value(JNRD6040_JN_RST, 1); // Release reset
++    
++    gpio_request(JNRD6040_EXT_6, "jnrd6040:ext:6");
++    gpio_export(JNRD6040_EXT_6, 0);
++    printk(KERN_INFO "Exported EXT pin 06: gpo23 (GPIO %d)\n", JNRD6040_EXT_6);
++    
++    gpio_request(JNRD6040_EXT_12, "jnrd6040:ext:12");
++    gpio_export(JNRD6040_EXT_12, 1);
++    printk(KERN_INFO "Exported EXT pin 12: gpio01 (GPIO %d)\n", JNRD6040_EXT_12);
++}
++
++static int __init lpc32xx_display_uid(void)
++{
++    u32 uid[4];
++
++    lpc32xx_get_uid(uid);
++
++    printk(KERN_INFO "LPC32XX unique ID: %08x%08x%08x%08x\n",
++            uid[3], uid[2], uid[1], uid[0]);
++
++    return 1;
++}
++arch_initcall(lpc32xx_display_uid);
++
++MACHINE_START (EA3250, "JNRD6040: NXP LPC3240 / JN5168 Gateway Reference Design")
++    /* Maintainer: NXP */
++    .atag_offset       = 0x100,
++    .map_io            = lpc32xx_map_io,
++    .init_irq          = lpc32xx_init_irq,
++    .timer             = &lpc32xx_timer,
++    .init_machine      = jnrd6040_board_init,
++    .restart           = lpc23xx_restart,
++MACHINE_END
++
++/* For backwards compatibility with older bootloaders only */
++MACHINE_START (LPC3XXX, "JNRD6040: NXP LPC3240 / JN5168 Gateway Reference Design")
++    /* Maintainer: NXP */
++    .atag_offset       = 0x100,
++    .map_io            = lpc32xx_map_io,
++    .init_irq          = lpc32xx_init_irq,
++    .timer             = &lpc32xx_timer,
++    .init_machine      = jnrd6040_board_init,
++    .restart           = lpc23xx_restart,
++MACHINE_END

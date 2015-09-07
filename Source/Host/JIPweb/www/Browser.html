@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>NXP IoT Browser</title>
+
+        <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+        <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.js"></script>-->
+        <script src="js/jquery.min.js"></script>
+   
+        <!--<script src="/js/jquery.history.js"></script>-->
+            
+        <!-- Bootstrap -->
+        <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
+        <script src="bootstrap/js/bootstrap.js"></script>
+        
+        <!-- Spin.js Javascript library (http://fgnass.github.io/spin.js) -->
+        <script src="js/spin.min.js"></script>
+        
+        <!-- NXP Style -->
+        <link href="style.css" rel="stylesheet">
+        
+        <!-- JIP Javascript library -->
+        <script src="js/JIP.js"></script>
+
+        <script>
+
+var Version="2.1"
+
+// Default state is just to display the available networks.
+var appState = {activeTab: "#tab_networks"};
+
+function vVariableDisplayNodeMAC(variable) {
+    // MIB: Node, VAR: MacAddr. Return padded, hex formatted string.
+    return "0x" + String("0000000000000000" + this.Data.toString(16)).slice(-16)
+};
+
+function vVariableDisplayONDImages(variable) {
+    // Display OND Images
+    var value = $("<table class='table table-bordered table-striped'></table>");
+    
+    value.append("<thead><tr><th>Image Number</th><th>Device ID</th><th>Chip ID</th><th>Revision</th><th>Image Size</th><th>Blocks Remaining</th><th>Status</th></tr></thead>");
+    var tbody = value.append("<tbody></tbody>");
+    
+    $(this.Data).each(function(i, row) {
+        var DeviceID = row.slice(2,10);
+        var ChipID = parseInt(row.slice(10,14), 16);
+        var Revision = row.slice(14,18);
+        var BlocksRemaining = parseInt(row.slice(18,22), 16);
+        var BlocksTotal = parseInt(row.slice(22,26), 16);
+        var Status = ["Blank", "Current", "Valid", "Downloading"][parseInt(row.slice(26,28), 16)];
+        if (Status == "Blank")
+        {
+            tbody.append("<tr><td data-title='Image Number'>" + i + "</td><td colspan='6' data-title='Status' class='text-right'>Blank</td></tr>");
+        }
+        else
+        {
+            tbody.append("<tr>  <td data-title='Image Number'>" + i + "</td> \
+                                <td data-title='Device ID'>0x" + DeviceID + "</td> \
+                                <td data-title='Chip ID'>" + ChipID + "</td> \
+                                <td data-title='Revision'>0x" + Revision + "</td> \
+                                <td data-title='Image Size'>" + BlocksTotal + "</td> \
+                                <td data-title='Blocks Remaining'>" + BlocksRemaining + "</td> \
+                                <td data-title='Status'>" + Status + "</td></tr>");
+        }
+    });
+
+    return value;
+}
+
+function vVariableDisplayGeneric(variable) {
+    // Generic function
+    var value;
+    if (this.Type == 75)
+    {
+        // Table
+        value = $("<table class='table table-bordered table-striped'></table>");
+        
+        value.append("<thead><tr><th>Row</th><th>Data</th></thead>");
+        var tbody = value.append("<tbody></tbody>");
+        
+        $(this.Data).each(function(i, row) {
+            if (row) {
+                tbody.append("<tr><td data-title='Row'>" + i + "</td><td data-title='Data'>" + row + "</td></tr>");
+            }
+        });
+    }
+    else
+    {
+        value = ((this.display == 16) ? "0x" : "") +  this.Data.toString(this.display);
+    }
+    return value;
+};
+        
+JIP_DeviceCache.cbVar.push(function(variable) {
+    if ((variable.parentMib.ID == 0xFFFFFF00) && (variable.Index == 0))
+    {
+        variable.GetVarValue = vVariableDisplayNodeMAC;
+    }
+    else if ((variable.parentMib.ID == 0xFFFFFF03) && (variable.Index == 0))
+    {
+        variable.GetVarValue = vVariableDisplayONDImages;
+    }
+    else
+    {
+        // Set default display format
+        if (((variable.parentMib.ID == 0xFFFFFF01) && (variable.Index == 1)) || // JenNet: Parent Interface
+            ((variable.parentMib.ID == 0xFFFFFF03) && (variable.Index == 1)) || // OND: DeviceID
+            ((variable.parentMib.ID == 0xFFFFFF04) && (variable.Index == 0)) // DeviceID: DeviceID
+        )
+        {
+            variable.display = 16;
+        }
+        else
+        {
+            variable.display = 10;
+        }
+        
+        variable.GetVarValue = vVariableDisplayGeneric;
+    }   
+});
+
+
+// Function to be called when each request is started.
+JIP_RequestManager.addCallback("start", function(op_str) {
+    $("#progressDialog").modal('show');
+    $("#result").text(op_str);
+    $("#result").removeClass("alert-success").removeClass("alert-danger");
+});
+
+// Function to be called when each request is completed.
+JIP_RequestManager.addCallback("done", function(op_str, data, remaining) {
+
+    $("#result").text([op_str, data.Status.Description].join(": "));
+
+    if (data.Status.Value == 0)
+    {
+        $("#result").addClass("alert-success")
+    }
+    else
+    {
+        $("#result").addClass("alert-danger")
+    }
+
+    if (remaining == 0)
+    {
+        if (data.Status.Value == 0)
+        {
+            timeout = 500;
+        } else {
+            timeout = 750;
+        }
+        
+        setTimeout(function() {
+            $("#progressDialog").modal('hide');
+        }, timeout);
+    }
+});
+
+
+function vDiscoverNetworks(callback)
+{
+    if ((appState.BorderRouters === undefined) || (appState.BorderRouters.length < 1))
+    {
+        // If there are no border routers, don't do this.
+        typeof callback === 'function' && callback();
+        return;
+    }
+
+    JIP_Contexts.length = 0;
+
+    for (var bridx in appState.BorderRouters)
+    {
+        var br = appState.BorderRouters[bridx];
+        var ctx = new JIP_Context();
+        var discovered = 0;
+        
+        ctx.Connect(br);
+        ctx.Discover(function(Status, JIP_Context) {
+            discovered++;
+
+            /* Increment number of discovered networks. It this is the last one, trigger the requested callback */
+            if (discovered == JIP_Contexts.length)
+            {
+                $(JIP_Contexts).each(function(i, JIP_Context)
+                {
+                    typeof callback === 'function' && callback();
+                });
+            }
+        });
+        JIP_Contexts.push(ctx);
+    }
+}
+
+
+// Function to be called upon change of tab
+$(function(){
+    $('a[data-toggle="tab"]').on('show.bs.tab', function (e) {
+        appState.activeTab = e.target.hash;
+
+        JIP_CancelPendingRequests();
+        
+        if (appState.activeTab == "#tab_networks")
+        {
+            $('#menu a[href="#tab_devices"]').fadeOut();
+            $('#menu a[href="#tab_mibs"]').fadeOut();
+            $('#menu a[href="#tab_vars"]').fadeOut();
+            
+            // Clear list of border routers
+            appState.BorderRouters  = undefined;
+            appState.activeNode     = undefined;
+            appState.activeMib      = undefined;
+            
+            JIP_DiscoverBRs(function (Status) {
+                vDisplayBorderRouters();
+            });
+        }
+        else if (appState.activeTab == "#tab_devices")
+        {
+            $('#menu a[href="#tab_devices"]').fadeIn();
+            $('#menu a[href="#tab_mibs"]').fadeOut();
+            $('#menu a[href="#tab_vars"]').fadeOut();
+            
+            // Clear active node
+            appState.activeNode     = undefined;
+            appState.activeMib      = undefined;
+            
+            vDisplayNetworks();
+        }
+        else if (appState.activeTab == "#tab_mibs")
+        {
+            $('#menu a[href="#tab_devices"]').fadeIn();
+            $('#menu a[href="#tab_mibs"]').fadeIn();
+            $('#menu a[href="#tab_vars"]').fadeOut();
+            
+            appState.activeMib      = undefined;
+            
+            vDisplayNode();
+        }
+        else if (appState.activeTab == "#tab_vars")
+        {
+            $('#menu a[href="#tab_devices"]').fadeIn();
+            $('#menu a[href="#tab_mibs"]').fadeIn();
+            $('#menu a[href="#tab_vars"]').fadeIn();
+            
+            vDisplayMib();
+        }
+        
+        if ((history.state == null) || (history.state.activeTab != appState.activeTab))
+        {
+            history.pushState(appState, "", appState.activeTab);
+        }
+    });
+});
+
+
+$(document).ready(function() {
+    
+    $(window).bind("load popstate", function(event) {
+        
+        if (!(window.history && history.pushState))
+        {
+            /* Browser doesn't support history */
+            
+            if (event.type == "load")
+            {
+                /* On load go to networks tab */
+                return $("#menu a[href='#tab_networks']").tab("show");
+            }
+            /* Otherwise just don't do anything */
+            return;
+        }
+        
+        if (history.state == null)
+        {
+            /* First load */
+            return $("#menu a[href='#tab_networks']").tab("show");
+        }
+        
+        // Restore the application state
+        appState.activeTab = history.state.activeTab;
+        appState.BorderRouters = history.state.BorderRouters;
+        appState.activeNode = history.state.activeNode;
+        appState.activeMib = history.state.activeMib;
+        
+        if (appState.activeTab === undefined)
+        {
+            /* If no active tab, activate networks tab */
+            return $("#menu a[href='#tab_networks']").tab("show");
+        }
+        
+        if (event.type == "load")
+        {
+            // On load, rediscover the network.
+            vDiscoverNetworks(function()
+            {
+                // And display the active tab
+                $("#menu a[href='" + appState.activeTab +"']").tab("show");
+                
+                // And display the version
+                JIP_GetVersion(function (Result) {
+                    if (Result.Status.Value == 0)
+                    {
+                        $("#footer").text("JIP Browser version " + Version + " using JIPcgi version " + Result.Version.JIPcgi + " & libJIP version " + Result.Version.libJIP);
+                    }
+                });
+            });
+        }
+        else
+        {
+            // On navigation, just display the active tab
+            $("#menu a[href='" + appState.activeTab +"']").tab("show");
+        }
+    });
+});
+
+        </script>
+        
+    </head>
+    <body>
+    
+<!-- Modal Multicast Set -->
+<div class="modal fade" id="multicastSet" tabindex="-1" role="dialog" aria-labelledby="multicastSetLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title" id="multicastSetLabel">Multicast Set</h4>
+      </div>
+      <div class="modal-body">
+        <span id="multicastSetDescription"></span><br />
+        <label>Multicast Address:<input type="text" class="form-input" id="multicastSetValue"></input>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="multicastSetButton">Set</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Progress Popup -->
+<div class="modal fade" id="progressDialog" tabindex="-1" role="dialog" aria-labelledby="progressDialogLabel" aria-hidden="true" data-backdrop="">
+<div class="modal-dialog pull-right panel panel-default" id="result_wrapper">
+    <div class="pull-left" id="result_spinner"></div>
+    <script>
+
+        // jquery extension for the spinner.
+        $.fn.spin = function(opts) {
+            this.each(function() {
+            var $this = $(this),
+                data = $this.data();
+
+            if (data.spinner) {
+                data.spinner.stop();
+                delete data.spinner;
+            }
+            if (opts !== false) {
+                data.spinner = new Spinner($.extend({color: $this.css('color')}, opts)).spin(this);
+            }
+            });
+            return this;
+        };
+        $('#result_spinner').spin({left:'30px'});
+
+        $("#progressDialog").click(function(event) { JIP_CancelPendingRequests(); $("#progressDialog").modal('hide'); });
+    </script>
+    <div id="result"></div>
+</div>
+</div>
+    
+        <div class="container content">
+            <div class="navbar navbar-default" role="navigation">
+                <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <img class="navbar-brand navbar-brand-img" src="img/NXP_logo.gif">
+                <span class="navbar-brand">IoT Browser</span>
+                </div>
+                <div class="collapse navbar-collapse">
+                <ul class="nav nav-pills nav-justified" id="menu">
+                    <li><a href="#tab_networks" data-toggle="tab">Border Routers</a></li>
+                    <li><a style="display:none" href="#tab_devices" data-toggle="tab">Devices</a></li>   
+                    <li><a style="display:none" href="#tab_mibs" data-toggle="tab">MIBs</a></li>     
+                    <li><a style="display:none" href="#tab_vars" data-toggle="tab">Variables</a></li>   
+                </ul>
+                </div><!--/.nav-collapse -->
+            </div>
+            
+            <div class="tab-content">
+                <div class="tab-pane fade in active" id="tab_networks">
+                    <h4>Border Router Selection</h4>
+                    <div class="row" id="tab_networks_brs">                    
+                        <script>
+function tab_networks_brs_add(br)
+{
+    var new_br = $("<div class='col'> <div class='input-group'><input type='text' class='form-control'> \
+        <span class='input-group-addon'><input type='checkbox' checked=true></span></div></div>");
+    
+    var test = $(new_br).find("input[type=text]")
+    
+    test.val(br);
+    test.attr('readonly', true)
+    
+    $("#tab_networks_brs").append(new_br);
+    return new_br;
+}
+
+function vDisplayBorderRouters()
+{
+    $("#tab_networks_brs").empty();
+    
+    for (var bridx in JIP_BRList)
+    {
+        tab_networks_brs_add(JIP_BRList[bridx]);
+    }
+}
+                        </script>
+                    </div>
+                    
+                    <div class="row" id="tab_networks_brs">
+                        
+                        <div class="input-group">
+                            <input type="text" id="tab_networks_add_txt" class="form-control">
+                            <span class="input-group-btn">
+                                <button id="tab_networks_add_btn" class="btn btn-default" type="button"><span class="glyphicon glyphicon-plus-sign"></span> Add</button>
+                            </span>
+                            <script>
+$("#tab_networks_add_btn").click(function(e) {
+    var br = $("#tab_networks_add_txt").val();
+    if (br.length)
+    {
+        tab_networks_brs_add(br);
+    }
+    $("#tab_networks_add_txt").val("");
+});
+                            </script>
+                        </div><!-- /input-group -->
+                    </div><!-- row -->
+                    <br />
+                    <div class="row">
+                        <div class="col">
+                            <button type="button" id="tab_networks_discover_btn" class="btn btn-primary"><span class="glyphicon glyphicon-search"></span> Discover Network(s)</button>
+                            <script>
+$("#tab_networks_discover_btn").click(function(e) {
+
+    var selected_brs = $("#tab_networks_brs").find("div.input-group")
+    if (appState.BorderRouters === undefined)
+    {
+        appState.BorderRouters = [];
+    }
+    else
+    {
+        appState.BorderRouters.length = 0;
+    }
+
+    // Update the list of border routers with those selected.
+    selected_brs.each(function(e, element) {
+        var select = $(element).find("input[type=checkbox]")[0];
+        if (select.checked == true)
+        {
+            var br = $(element).find("input[type=text]").val();
+            appState.BorderRouters.push(br);
+        }
+    })
+    
+    vDiscoverNetworks(function()
+    {
+        // Discover available networks, and then activate the devices tab.
+        $('#menu a[href="#tab_devices"]').tab('show');
+    });
+});
+                            </script>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-pane fade" id="tab_devices">
+                    <script>
+function vDisplayNetworks()
+{
+    var devicecount = 0;
+    
+    $("#tab_devices").empty().append("<div class='row'><div class='col'><h4 id='device_tab_heading'>Discovered Devices</h4><div></div>");
+    
+    for (var ctxidx in JIP_Contexts)
+    {
+        var JIP_Context = JIP_Contexts[ctxidx];
+        for (var nodeidx in JIP_Context.Network.Nodes)
+        {
+            var address = JIP_Context.Network.Nodes[nodeidx].IPv6Address;
+            var node = $("<div class='row text-left'> \
+                <div class='col-sm-6'><a><h4>" + address + "</h4></a></div> \
+                <div class='col-sm-6 text-right'><h4><small>" + address + "</small></h4></div> \
+                </div>");
+            $(node).click({Node: JIP_Context.Network.Nodes[nodeidx]}, function(event) {
+                appState.activeNode = event.data.Node.IPv6Address;
+                $('#menu a[href="#tab_mibs"]').tab('show');
+            });
+            
+            $("#tab_devices").append(node);
+            $("#tab_devices").append("<hr/>");
+            
+            var tmp = $(node).find("a");
+            if (JIP_Context.Network.Nodes[nodeidx].MiBs[0].Vars[1].Data === undefined)
+            {
+                // We don't already have a copy of the node name, so read it.
+                JIP_Context.GetVar(JIP_Context.Network.Nodes[nodeidx].MiBs[0].Vars[1], vDisplayNetworksNodeName, tmp[0]);
+            }
+            else
+            {
+                // Node name is already known
+                vDisplayNetworksNodeName(JIP_MakeStatus("Success", 0).Status, tmp[0], JIP_Context.Network.Nodes[nodeidx].MiBs[0].Vars[1]);
+            }
+        }
+        devicecount = devicecount + JIP_Context.Network.Nodes.length;
+    };
+    
+    $("#device_tab_heading").text("Discovered " + devicecount + " devices");
+}
+
+function vDisplayNetworksNodeName(Status, element, variable)
+{
+    if (Status.Value == 0)
+    {
+        name = variable.GetVarValue();
+    
+        if (name != "")
+        {
+            // Make sure the node has a valid name string
+            $(element).html("<h4>" + name + "</h4>");
+        }
+    }
+}
+
+                    </script>
+                </div>
+                
+                <div class="tab-pane fade" id="tab_mibs">
+                    <script>
+                    
+                    
+function vDisplayNode()
+{
+    var JIP_Context = undefined;
+    var node = undefined;
+    
+    for (var ctxidx in JIP_Contexts)
+    {
+        JIP_Context = JIP_Contexts[ctxidx];
+        if (JIP_Contexts[ctxidx].Network !== undefined)
+        {
+            for (nodeidx in JIP_Contexts[ctxidx].Network.Nodes)
+            {
+                if (JIP_Context.Network.Nodes[nodeidx].IPv6Address == appState.activeNode)
+                {
+                    node = JIP_Context.Network.Nodes[nodeidx];
+                }
+            }
+        }
+    }
+    if (node === undefined)
+    {
+        alert("Node " + appState.activeNode + " was not found in the selected networks!");
+        $('#menu a[href="#tab_devices"]').tab('show') // Activate the devices tab.
+        return;
+    }
+    
+    $("#tab_mibs").empty().append("<div class='row'><div class='col'><h4>Node " + node.IPv6Address + "</h4><div></div>");
+    
+    for (var mibidx in node.MiBs)
+    {
+        var mib = node.MiBs[mibidx]
+        var mibid = mib.ID;
+        var div = $("<div class='row text-left'> \
+                <div class='col-xs-6'><a><h4>" + mib.Name + "</h4></a></div> \
+                <div class='col-xs-6 text-right'><h4><small>" + mibid.toString(16).toUpperCase() + "</small></h4></div> \
+                </div>");
+        
+        $(div).click({mib: mib}, function(event) {
+            appState.activeMib  = event.data.mib.ID;
+            $('#menu a[href="#tab_vars"]').tab('show');
+        });
+
+        $("#tab_mibs").append(div);
+        $("#tab_mibs").append("<hr/>");
+    }
+}
+                    </script>
+                </div>
+                
+                <div class="tab-pane fade" id="tab_vars">
+                    <script>
+function vDisplayMib(event)
+{
+    var JIP_Context = undefined;
+    var Node = undefined;
+    var Mib = undefined;
+    
+    for (var ctxidx in JIP_Contexts)
+    {
+        JIP_Context = JIP_Contexts[ctxidx];
+        for (nodeidx in JIP_Contexts[ctxidx].Network.Nodes)
+        {
+            if (JIP_Context.Network.Nodes[nodeidx].IPv6Address == appState.activeNode)
+            {
+                Node = JIP_Context.Network.Nodes[nodeidx];
+                break;
+            }
+        }
+        if (Node !== undefined)
+        {
+            break;
+        }
+    }
+    if (Node === undefined)
+    {
+        alert("Node " + appState.activeNode + " was not found in the selected networks!");
+        $('#menu a[href="#tab_devices"]').tab('show'); // Activate the devices tab.
+        return;
+    }
+    else
+    {
+        for (var mibidx in Node.MiBs)
+        {
+            if (Node.MiBs[mibidx].ID == appState.activeMib)
+            {
+                Mib = Node.MiBs[mibidx];
+            }
+        }
+    }
+    
+    if (Mib === undefined)
+    {
+        alert("MIB " + appState.activeMib + " on node " + appState.activeNode + " was not found!");
+        $('#menu a[href="#tab_mibs"]').tab('show'); // Activate the MIBs tab.
+        return;
+    }
+    
+    $("#tab_vars").empty().append("<div class='row'><div class='col'><h4>Mib \"" + Mib.Name + "\" on Node: " + Node.IPv6Address + "</h4><div></div>");
+    
+    for (var varidx in Mib.Vars)
+    {
+        var variable = Mib.Vars[varidx];
+        var div = $("<div class='row'> \
+                <div class='col-xs-6 text-left'><h4>" + variable.Name + "</h4></div> \
+                <div class='col-xs-6 text-right'><h4><small>Variable Index " + varidx + "</small></h4></div> \
+                </div><div class='row'> \
+                <div class='col-sm-6 text-left'></div> \
+                <div class='col-sm-6 text-right'></div> \
+                </div>");
+     
+        var leftdiv = $(div).find("div")[2];
+        var rightdiv = $(div).find("div")[3];
+     
+        if (variable.AccessType == 2)
+        {
+            var varInput = $("<input type='text' class='form-control' value='Reading var'/>").appendTo($(leftdiv))[0];
+            
+            var btngrp = $("<div class='btn-group'> \
+                    <button type='button' class='btn btn-default btn-sm'>Set</button> \
+                    <button type='button' class='btn btn-default btn-sm'>Multicast Set</button> \
+                    <button type='button' class='btn btn-default btn-sm'>Refresh</button> \
+                </div>").appendTo(rightdiv);
+            var btns = $(btngrp).find("button");
+            
+            JIP_Context.GetVar(variable, vDisplayRWVar, varInput);
+            
+            // On click of the set button
+            $(btns[0]).click(
+                {
+                    JIP_Context: JIP_Context,
+                    variable: variable,
+                    varInput: varInput
+                }, 
+                vVariableSet
+            );
+            
+            // On key release in the text field
+            $(varInput).keyup(
+                {
+                    JIP_Context: JIP_Context,
+                    variable: variable,
+                    varInput: varInput
+                }, 
+                vVariableSet
+            );
+            
+            // Multicast set button
+            $(btns[1]).click(
+                {
+                    JIP_Context: JIP_Context,
+                    mib: Mib,
+                    variable: variable,
+                    varInput: varInput
+                }, 
+                function(event) {
+                    $("#multicastSetButton").off('click').click(
+                        {
+                            JIP_Context: event.data.JIP_Context,
+                            variable: event.data.variable,
+                            varInput: event.data.varInput,
+                        }, 
+                        function(event) {
+                            var IPv6Address = $("#multicastSetValue").val();
+                            var variable = event.data.variable;
+                            var mib = variable.parentMib;
+                            if (IPv6Address.length == 0)
+                            {
+                                alert("Invalid Multicast Address");
+                                return;
+                            }
+                            JIP_Context.SetVar(variable, event.data.varInput.value, IPv6Address)
+                            $('#multicastSet').modal('hide')
+                        }
+                    );
+                    
+                    var str = "Set Mib '" + event.data.mib.Name + "', Variable '" + event.data.variable.Name + "' to value '" + event.data.varInput.value + "'";
+                            
+                    $("#multicastSetDescription").text(str);
+                    
+                    $('#multicastSet').modal('show')
+                }
+            );
+            
+            $(btns[2]).click(
+                {
+                    JIP_Context: JIP_Context,
+                    variable: variable,
+                    varInput: varInput
+                },
+                function(event) {
+                    var JIP_Context = event.data.JIP_Context;
+                    JIP_Context.GetVar(event.data.variable, vDisplayRWVar, event.data.varInput);
+                }
+            );
+        }
+        else
+        {
+            $(leftdiv).html("Reading var...");
+            JIP_Context.GetVar(variable, vDisplayVar, leftdiv);
+            
+            var refreshBut = $("<button type='button' class='btn btn-default'>Refresh</button>").appendTo(rightdiv);
+            $(refreshBut).click(
+                {
+                    JIP_Context: JIP_Context,
+                    variable: variable,
+                    displayDiv: leftdiv
+                },
+                function(event) {
+                    var JIP_Context = event.data.JIP_Context;
+                    JIP_Context.GetVar(event.data.variable, vDisplayVar, event.data.displayDiv);
+                }
+            );
+        }
+
+        $("#tab_vars").append(div);
+        $("#tab_vars").append("<hr/>");
+    }
+}
+
+function vVariableSet(event) {
+    if (event.type == "keyup")
+    {
+        // Check if this event was a keyup, and if so was it the return key?
+        if (event.keyCode != 13)
+        {
+            return;
+        }
+    }
+    var JIP_Context = event.data.JIP_Context;
+    var variable = event.data.variable;
+    var mib = variable.parentMib;
+    var node = mib.parentNode;
+
+    JIP_Context.SetVar(variable, event.data.varInput.value)
+}
+
+function vDisplayVar(Status, element, variable)
+{
+    if (Status.Value == 0)
+    {
+        $(element).html(variable.GetVarValue());
+    }
+    else
+    {
+        $(element).html(Status.Description);
+    }
+}
+
+function vDisplayRWVar(Status, element, variable)
+{
+    if (Status.Value == 0)
+    {
+        $(element).val(variable.GetVarValue());
+    }
+    else
+    {
+        $(element).val(Status.Description);
+    }
+}
+                
+                    </script>
+                </div> <!-- tab_vars -->
+            </div> <!-- tab-content -->
+        </div><!-- container -->
+
+        <div class="container">
+            <div id="footer">
+                JIP Browser version <script>document.write(Version)</script>
+            </div>
+        </div>
+    </body>
+</html>

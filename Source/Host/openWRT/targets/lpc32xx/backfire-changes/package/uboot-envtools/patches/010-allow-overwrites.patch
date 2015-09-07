@@ -1,0 +1,11 @@
+--- a/Makefile
++++ b/Makefile
+@@ -24,6 +24,8 @@
+ SRCS := crc32.c fw_env.c fw_env_main.c
+ HEADERS	:= fw_env.h
+ 
++CFLAGS += -DCONFIG_ENV_OVERWRITE
++
+ CPPFLAGS := -Wall $(CFLAGS)
+ 
+ all: fw_printenv

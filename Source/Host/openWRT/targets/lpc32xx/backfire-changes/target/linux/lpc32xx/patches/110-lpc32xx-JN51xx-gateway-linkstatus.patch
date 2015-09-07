@@ -1,0 +1,46 @@
+--- a/drivers/net/ethernet/nxp/lpc_eth.c
++++ b/drivers/net/ethernet/nxp/lpc_eth.c
+@@ -36,6 +36,7 @@
+ #include <linux/etherdevice.h>
+ #include <linux/skbuff.h>
+ #include <linux/phy.h>
++#include <mach/gpio.h>
+ 
+ #include <asm/delay.h>
+ #include <asm/io.h>
+@@ -53,6 +54,8 @@
+ #define ENET_RX_DESC 48
+ #define ENET_TX_DESC 16
+ 
++#define ETH_SPD_LED	LPC32XX_GPIO(LPC32XX_GPO_P3_GRP, 15)
++
+ #if defined(CONFIG_ARCH_LPC32XX_IRAM_FOR_NET)
+ extern u32 lpc32xx_return_iram_size(void);
+ #endif
+@@ -322,6 +325,10 @@ static void __lpc_eth_init(struct netdat
+ {
+ 	u32 tmp;
+ 
++	gpio_request(ETH_SPD_LED, "ETHSPD");
++	gpio_direction_output(ETH_SPD_LED, 1);
++	gpio_set_value(ETH_SPD_LED, 1); // LED off
++
+ 	/* Disable controller and reset */
+ 	tmp = readl(LPC_ENET_COMMAND(pldat->net_base));
+ 	tmp &= ~LPC_COMMAND_RXENABLE | LPC_COMMAND_TXENABLE;
+@@ -451,6 +458,7 @@ static void lpc_handle_link_change(struc
+ 			pldat->speed = phydev->speed;
+ 			pldat->duplex = phydev->duplex;
+ 			status_change = 1;
++			gpio_set_value(ETH_SPD_LED, (pldat->speed==SPEED_100) ? 0 : 1);
+ 		}
+ 	}
+ 
+@@ -458,6 +466,7 @@ static void lpc_handle_link_change(struc
+ 		if (!phydev->link) {
+ 			pldat->speed = 0;
+ 			pldat->duplex = -1;
++			gpio_set_value(ETH_SPD_LED, 1);
+ 		}
+ 		pldat->link = phydev->link;
+ 

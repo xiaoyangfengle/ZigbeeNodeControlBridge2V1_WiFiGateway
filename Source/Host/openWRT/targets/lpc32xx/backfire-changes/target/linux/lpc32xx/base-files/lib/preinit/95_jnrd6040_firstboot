@@ -1,0 +1,122 @@
+#!/bin/sh
+
+
+jnrd6040_firstboot_program_jn516x() {
+
+    if [ -z $1 ]
+    then
+        f=`ls /usr/share/JennicModuleProgrammer/*.bin | head -1`
+    else
+        f=$1
+    fi
+
+    if [ -n $f ]
+    then
+        echo "Programming JN516x device with firmware $f"
+
+        /usr/bin/JennicModuleProgram.sh $f
+        return $?
+
+    else
+        echo "No firmware found"
+        return 20
+    fi
+}
+
+
+jnrd6040_firstboot_rf_test() {
+    echo "Enabling FTDI driver"
+    insmod "usbserial"
+    insmod "ftdi_sio"
+    sleep 1
+
+    if [ -c "/dev/ttyUSB0" ]
+    then
+        echo "USB test: RF test board found"
+    else
+        echo "USB test: RF test board not found: FAILED!"
+        return 30
+    fi
+
+    pertest_file="/usr/share/JennicModuleProgrammer/IoTGatewayTest_JN5168.bin"
+
+    jnrd6040_firstboot_program_jn516x $pertest_file
+
+    if $?
+    then 
+        echo "Failed to program internal JN516x device - RF test failed!"
+        return 31
+    fi
+
+    # Run the RF test, redirecting Pythons logging to stdout (defaults to stderr)
+    /usr/bin/python /usr/bin/production-pertest.py -p /dev/ttyTX0:921600 -p /dev/ttyUSB0 2>&1
+    
+    return $?
+}
+
+
+jnrd6040_firstboot_set_mac() {
+    # Get the MAC address of the JN51xx
+    mac=`/usr/bin/JennicModuleProgram.sh | grep MAC | sed -e "s/MAC Address:   //g" | awk 'BEGIN {FS=":"} {print $1":"$2":"$3":"$6":"$7":"$8}'`
+
+    # Validate mac address
+
+    echo "Setting MAC address to $mac"
+
+    # Set the MAC address in the uboot environment.
+    /usr/sbin/fw_setenv ethaddr $mac
+    return $?
+}
+
+
+jnrd6040_firstboot_done() {
+    # Turn off all other LEDs and wait 20 seconds for operator
+
+    # Turn off LED2
+    echo "none" > /sys/class/leds/jnrd6040:yellow:A/trigger
+    echo 0 > /sys/class/leds/jnrd6040:yellow:A/brightness
+
+    # Turn off LED5
+    echo "none" > /sys/class/leds/jnrd6040\:yellow\:D/trigger
+    echo 255 > /sys/class/leds/jnrd6040\:yellow\:D/brightness
+
+    sleep 20
+}
+
+jnrd6040_firstboot_success() {
+    echo "- JNRD6040 firstboot - Success :-) -"
+    # Green LED has inverted sense
+    echo 0 > /sys/class/leds/jnrd6040:green:C/brightness
+
+    # Turn off LED3
+    echo "none" > /sys/class/leds/jnrd6040:red:B/trigger
+    echo 0 > /sys/class/leds/jnrd6040:red:B/brightness
+    jnrd6040_firstboot_done
+}
+
+
+jnrd6040_firstboot_fail() {
+    echo "- JNRD6040 firstboot - Failed :-( -"
+    # Turn on red LED3
+    echo "none" > /sys/class/leds/jnrd6040:red:B/trigger
+    echo 255 > /sys/class/leds/jnrd6040:red:B/brightness
+    jnrd6040_firstboot_done
+}
+
+
+jnrd6040_firstboot() {
+    # Check if the Ethernet address has been set yet,
+    if /usr/sbin/fw_printenv ethaddr | grep "00:15:8d:00:00:00" > /dev/null
+    then
+        echo "- JNRD6040 firstboot -"
+
+        jnrd6040_firstboot_rf_test && \
+        jnrd6040_firstboot_program_jn516x && \
+        jnrd6040_firstboot_set_mac && \
+        jnrd6040_firstboot_success || jnrd6040_firstboot_fail
+
+    fi
+}
+
+
+boot_hook_add preinit_main jnrd6040_firstboot

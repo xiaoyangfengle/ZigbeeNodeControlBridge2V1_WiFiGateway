@@ -1,0 +1,10 @@
+--- a/package/base-files/Makefile
++++ b/package/base-files/Makefile
+@@ -90,6 +90,7 @@
+ 	if [ -d $(PLATFORM_DIR)/base-files/. ]; then \
+ 		$(CP) $(PLATFORM_DIR)/base-files/* $(1)/; \
+ 	fi
++	$(if $(shell ls -A $(PLATFORM_DIR)/base-files/usr/share/JennicModuleProgrammer/*bin),, $(error No firmware files for the JN516x in base files directory - target/linux/lpc32xx/base-files/usr/share/JennicModuleProgrammer))
+ 	if [ -d $(PLATFORM_DIR)/base-files-$(PROFILE)/. ]; then \
+ 		$(CP) $(PLATFORM_DIR)/base-files-$(PROFILE)/* $(1)/; \
+ 	fi

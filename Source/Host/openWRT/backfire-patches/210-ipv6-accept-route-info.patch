@@ -1,0 +1,13 @@
+--- a/target/linux/generic/config-3.3	(revision 40431)
++++ b/target/linux/generic/config-3.3	(working copy)
+@@ -1151,8 +1151,8 @@
+ CONFIG_IPV6_NDISC_NODETYPE=y
+ # CONFIG_IPV6_OPTIMISTIC_DAD is not set
+ # CONFIG_IPV6_PRIVACY is not set
+-# CONFIG_IPV6_ROUTER_PREF is not set
+-# CONFIG_IPV6_ROUTE_INFO is not set
++CONFIG_IPV6_ROUTER_PREF=y
++CONFIG_IPV6_ROUTE_INFO=y
+ # CONFIG_IPV6_SIT is not set
+ # CONFIG_IPV6_SIT_6RD is not set
+ # CONFIG_IPV6_TUNNEL is not set

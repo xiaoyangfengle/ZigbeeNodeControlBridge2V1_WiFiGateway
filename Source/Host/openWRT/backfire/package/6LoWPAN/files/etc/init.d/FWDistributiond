@@ -1,0 +1,39 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2011 NXP Semiconductor
+
+START=99
+PROG=FWDistributiond
+
+start_FWDistributiond() {
+    local section="$1"
+
+    config_get_bool ignore "$section" ignore 0
+    [ "$ignore" -ne 0 ] && return 0
+    
+    local FWdir
+    config_get FWdir "${section}" FWdir
+    
+    # Ensure the firmware directory exists
+    mkdir -p $FWdir
+
+    local args
+    
+    args="-d $FWdir"
+
+    /sbin/$PROG $args &
+    
+    return $?
+}
+
+start () {
+    config_load $PROG
+    
+    args=""
+    
+    config_foreach start_FWDistributiond $PROG
+}
+
+stop () {
+    killall $PROG
+}
+

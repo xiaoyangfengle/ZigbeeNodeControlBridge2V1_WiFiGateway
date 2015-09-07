@@ -1,0 +1,253 @@
+<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+targetNamespace="http://www.w3schools.com"
+xmlns="http://www.w3schools.com"
+elementFormDefault="qualified">
+    
+    <xs:simpleType name="hex-integer-32">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                Base type for 32 bit integers in hexadecimal format
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:pattern value="0x[0-9a-fA-F]+" />
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="ipv6-addr">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                Type definition for validating IPv6 addresses.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:pattern value="(([0-9a-fA-F]+:){7}[0-9a-fA-F]+)|(([0-9a-fA-F]+:)*[0-9a-fA-F]+)?::(([0-9a-fA-F]+:)*[0-9a-fA-F]+)?"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="DeviceID">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                The device ID maps to a list of MiBs that are implemented by the device. In this way it defines the capabilities and function of a device.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="hex-integer-32">
+            <xs:length value="10"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    
+    <xs:simpleType name="MibID">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                A MiB ID defines a standardised interface to a function. This is through the variables that the MiB implements.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="hex-integer-32">
+            <xs:length value="10"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="MibIndex">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                The MiB index is deprecated, but is still used for some commands in the protocol to address a MiB on a node.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:nonNegativeInteger">
+            <xs:maxInclusive value="255"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="MibName">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                A Human readable name of the MiB. This describes the functionality accessible through the MiB.
+                This Name is a property of the instance of the MiB on a node. The same MiB can be instantiated multiple
+                times on a node, with different names and Indexes.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:maxLength value="255"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    
+    <xs:simpleType name="VarIndex">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                The index of the variable within its MiB. This is a fixed value for each variable within a MiB definition.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:nonNegativeInteger">
+            <xs:maxInclusive value="255"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="VarName">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                A Human readable name of the variable. This describes the function of the variable.
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:string">
+            <xs:maxLength value="255"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="VarType">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                The datatype of the variable. Possible values are:
+                0   = E_JIP_VAR_TYPE_INT8,                       /** Signed 8 bit integer */
+                1   = E_JIP_VAR_TYPE_INT16,                      /** Signed 16 bit integer */
+                2   = E_JIP_VAR_TYPE_INT32,                      /** Signed 32 bit integer */
+                3   = E_JIP_VAR_TYPE_INT64,                      /** Signed 64 bit integer */
+                4   = E_JIP_VAR_TYPE_UINT8,                      /** Unsigned 8 bit integer */
+                5   = E_JIP_VAR_TYPE_UINT16,                     /** Unsigned 16 bit integer */
+                6   = E_JIP_VAR_TYPE_UINT32,                     /** Unsigned 32 bit integer */
+                7   = E_JIP_VAR_TYPE_UINT64,                     /** Unsigned 64 bit integer */
+                8   = E_JIP_VAR_TYPE_FLT,                        /** 32 bit float (IEEE standard) */
+                9   = E_JIP_VAR_TYPE_DBL,                        /** 64 bit double (IEEE standard) */
+                10  = E_JIP_VAR_TYPE_STR,                        /** String */
+                11  = E_JIP_VAR_TYPE_BLOB,                       /** Binary object */
+
+                75  = E_JIP_VAR_TYPE_TABLE_BLOB,
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:nonNegativeInteger">
+            <xs:maxInclusive value="255"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="VarAccess">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                The access type of the variable. Possible values are:
+                0   = E_JIP_ACCESS_TYPE_CONST,                   /** Variable contains constant data */
+                1   = E_JIP_ACCESS_TYPE_READ_ONLY,               /** Variable contains read only data */
+                2   = E_JIP_ACCESS_TYPE_READ_WRITE,              /** Variable contains read/write data */
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:nonNegativeInteger">
+            <xs:maxInclusive value="2"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+    <xs:simpleType name="VarSecurity">
+        <xs:annotation>
+            <xs:documentation xml:lang="en-us">
+                The defined security restrictions to the variable. Possible values are:
+                0   = E_JIP_SECURITY_NONE,                       /** Variable has no security */
+            </xs:documentation>
+        </xs:annotation>
+        <xs:restriction base="xs:nonNegativeInteger">
+            <xs:maxInclusive value="0"/>
+        </xs:restriction>
+    </xs:simpleType>
+    
+
+    <xs:element name="JIP_Cache">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Network" minOccurs="0">
+                    <xs:annotation>
+                        <xs:documentation xml:lang="en-us">
+                            This section optionally defines the contents of an existing network of JIP Nodes.
+                            It can be used to save/restore a context of nodes that has been previously discovered.
+                            This section contains a list of nodes.
+                        </xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="Node" maxOccurs="unbounded">
+                                <xs:annotation>
+                                    <xs:documentation xml:lang="en-us">
+                                        Defines the IPv6 address of a node and what it's Device ID is.
+                                    </xs:documentation>
+                                </xs:annotation>
+                                <xs:complexType>
+                                    <xs:attribute name="DeviceID"   type="DeviceID" />
+                                    <xs:attribute name="Address"    type="ipv6-addr" />
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+
+                <xs:element name="MibIdCache" minOccurs="0">
+                    <xs:annotation>
+                        <xs:documentation xml:lang="en-us">
+                            Cache containing details of known MiBs.
+                        </xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="Mib" maxOccurs="unbounded">
+                                <xs:annotation>
+                                    <xs:documentation xml:lang="en-us">
+                                        Defines a MiB - it's unique ID and the list of variables that it contains.
+                                    </xs:documentation>
+                                </xs:annotation>
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="Var" maxOccurs="unbounded">
+                                            <xs:complexType>
+                                                <xs:attribute name="Index"      type="VarIndex" />
+                                                <xs:attribute name="Name"       type="VarName" />
+                                                <xs:attribute name="Type"       type="VarType" />
+                                                <xs:attribute name="Access"     type="VarAccess" />
+                                                <xs:attribute name="Security"   type="VarSecurity" />
+                                            </xs:complexType>
+                                        </xs:element>
+                                    </xs:sequence>
+                                    <xs:attribute name="ID" type="MibID" />
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+                
+                <xs:element name="DeviceIdCache" minOccurs="0">
+                    <xs:annotation>
+                        <xs:documentation xml:lang="en-us">
+                            Cache containing details of known Devices.
+                        </xs:documentation>
+                    </xs:annotation>
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="Device" maxOccurs="unbounded">
+                                <xs:annotation>
+                                    <xs:documentation xml:lang="en-us">
+                                        Defines a Device - it's unique ID and the list of MiBs that it contains.
+                                    </xs:documentation>
+                                </xs:annotation>
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="Mib" maxOccurs="unbounded">
+                                            <xs:complexType>
+                                                <xs:attribute name="ID"     type="MibID" />
+                                                <xs:attribute name="Index"  type="MibIndex" />
+                                                <xs:attribute name="Name"   type="MibName" />
+                                            </xs:complexType>
+                                        </xs:element>
+                                    </xs:sequence>
+                                    <xs:attribute name="ID" type="MibID" />
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+                
+            </xs:sequence>
+            <xs:attribute name="Version" type="xs:positiveInteger">
+                <xs:annotation>
+                    <xs:documentation xml:lang="en-us">
+                        Specifies the version of the file
+                    </xs:documentation>
+                </xs:annotation>
+            </xs:attribute>     
+        </xs:complexType>
+    </xs:element> 
+</xs:schema>

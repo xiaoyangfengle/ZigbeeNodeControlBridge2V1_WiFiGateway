@@ -1,0 +1,9 @@
+config zigbee-jip-daemon
+    option 'ignore'      '1'
+    option 'tty'         '/dev/ttyTX0'
+    option 'baudrate'    '921600'
+    option 'interface'   'zb0'
+    option 'mode'        'coordinator'
+    option 'borderrouter' 'fd04:bd3:80e8:10::1'
+    option 'channel'     '15'
+    option 'whitelisting' '0'

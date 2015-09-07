@@ -1,0 +1,33 @@
+
+config 'interface'
+        option 'interface' 'lan'
+        option 'AdvSendAdvert' '1'
+        option 'ignore' '0'
+        option 'IgnoreIfMissing' '1'
+        option 'AdvSourceLLAddress' '1'
+        option 'AdvDefaultPreference' 'medium'
+
+config 'route'
+        option 'interface' 'lan'
+        option 'ignore' '0'
+        option 'AdvRouteLifetime' '3600'
+        option 'AdvRoutePreference' 'medium'
+        list 'prefix' 'fd04:bd3:80e8:2::/64'
+
+config 'rdnss'
+        option 'interface' 'lan'
+        list 'addr' ''
+        option 'ignore' '1'
+
+config 'dnssl'
+        option 'interface' 'lan'
+        list 'suffix' ''
+        option 'ignore' '1'
+
+config 'prefix'
+        option 'ignore' '0'
+        option 'interface' 'lan'
+        option 'AdvOnLink' '1'
+        option 'AdvAutonomous' '1'
+        list 'prefix' 'fd04:bd3:80e8:1::/64'
+        option 'AdvRouterAddr' '1'

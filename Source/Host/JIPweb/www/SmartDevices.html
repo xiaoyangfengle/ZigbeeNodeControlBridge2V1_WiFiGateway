@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>NXP Smart Devices</title>
+
+        <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+        <!--<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.js"></script>-->
+        <script src="js/jquery.min.js"></script>
+            
+        <!-- Bootstrap -->
+        <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
+        <script src="bootstrap/js/bootstrap.js"></script>
+        
+        <!-- Spin.js Javascript library (http://fgnass.github.io/spin.js) -->
+        <script src="js/spin.min.js"></script>
+        
+        <!-- NXP Style -->
+        <link href="style.css" rel="stylesheet">
+        
+        <!-- JIP Javascript library -->
+        <script src="js/JIP.js"></script>
+
+        <script>
+
+var Version="2.2"
+
+// Default state is just to display the available networks.
+var appState = {activeTab: "#tab_networks"};
+
+var JIP_DEVICETYPE_BULB_MONO_C1     = 0x00E1;
+var JIP_DEVICETYPE_BULB_COLOR_C2    = 0x00F2;
+var JIP_DEVICETYPE_BULB_COLOR_C3    = 0x00F3;
+
+var JIP_DEVICETYPE_BULB_ALL = [ JIP_DEVICETYPE_BULB_MONO_C1, JIP_DEVICETYPE_BULB_COLOR_C2, JIP_DEVICETYPE_BULB_COLOR_C3 ];
+
+
+// From http://www.tannerhelland.com/4435/convert-temperature-rgb-algorithm-code/
+function colorTemperatureToRGB(kelvin)
+{
+    var temp = kelvin / 100;
+    var red, green, blue;
+ 
+    if (temp <= 66)
+    { 
+        red = 255; 
+        green = 99.4708025861 * Math.log(temp) - 161.1195681661;
+        if (temp <= 19)
+        {
+            blue = 0;
+        }
+        else
+        {
+            blue = 138.5177312231 * Math.log(temp-10) - 305.0447927307;
+        }
+    }
+    else
+    {
+        red = 329.698727446 * Math.pow(temp - 60, -0.1332047592);
+        green = 288.1221695283 * Math.pow(temp - 60, -0.0755148492 );
+        blue = 255;
+    }
+ 
+    red     = (red < 0)   ? red   = 0 : red;
+    green   = (green < 0) ? green = 0 : green;
+    blue    = (blue < 0)  ? blue  = 0 : blue;
+    
+    red     = (red > 255)   ? red   = 255 : red;
+    green   = (green > 255) ? green = 255 : green;
+    blue    = (blue > 255)  ? blue  = 255 : blue;
+
+    red = String("00" + Math.floor(red).toString(16)).slice(-2);
+    green = String("00" + Math.floor(green).toString(16)).slice(-2);
+    blue = String("00" + Math.floor(blue).toString(16)).slice(-2)
+    
+    return "#" + red + green + blue;
+}
+
+
+// Create a scene control
+function vCreateSceneControl(parentDiv, name, IPv6Address, sceneID, image)
+{    
+    var newdiv = $("<div class='col-xs-6 col-sm-3'><div class='panel panel-default scene'> \
+                         <h4>" + name + "</h4><img src='" + image + "'></img> \
+                    </div></div>").appendTo($(parentDiv));
+    
+    $(newdiv).click({ sceneID: sceneID },function(event) {
+        JIP_CancelPendingRequests();
+        $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "DeviceControl", varName: "SceneId"}), function(i, variable) {
+            variable.SetVar(event.data.sceneID, IPv6Address);
+        });
+    });
+}
+
+
+function vCreateLampControl(parentDiv, name, IPv6Address)
+{
+    var newdiv = $("<div class='row'> \
+            <div class='col-sm-6 text-left'><h4>" + name + "</h4></div> \
+            <div class='col-sm-6 text-right'><h4><small>" + IPv6Address + "</small></h4></div> \
+        </div><div class='row'> \
+        <div class='col-sm-5'> \
+            <button type='button' class='btn btn-default btn-lg ctrl-button' data-btn='offon'>Off</button> \
+            <button type='button' class='btn btn-default btn-lg ctrl-button' data-btn='offon'>On</button> \
+            <button type='button' class='btn btn-default btn-lg ctrl-button' data-btn='rgb'><img src='/img/hsv-shading.png' /></button> \
+            <button type='button' class='btn btn-default btn-lg ctrl-button' data-btn='temp'><img width='100%' src='/img/colour-temperature.png' /></button> \
+        </div><div class='col-sm-7'> \
+            <div class='progress btn-default ctrl-bar'> \
+                <div class='progress-bar' role='progressbar' aria-valuenow='50' aria-valuemin='0' aria-valuemax='255' style='width: 50%;'><span class='btn btn-lg' data-btn='level'>Level</span></div> \
+            </div> \
+        </div></div><hr />").appendTo($(parentDiv));
+    
+    
+    if (JIP_LookupDeviceTypes({IPv6Address: IPv6Address, DeviceTypes: JIP_DEVICETYPE_BULB_ALL}).length)
+    {
+        // Device has a DeviceControl:Mode variable, so we can activate the Off / On Buttons.
+    
+        // Off button
+        $(newdiv).find(".btn:eq(0)").click(function(event) {
+            JIP_CancelPendingRequests();
+            $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "DeviceControl", varName: "Mode"}), function(i, variable) {
+                variable.SetVar(0, IPv6Address);
+            });
+        });
+        
+        // On button
+        $(newdiv).find(".btn:eq(1)").click(function(event) {
+            JIP_CancelPendingRequests();
+            $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "DeviceControl", varName: "Mode"}), function(i, variable) {
+                variable.SetVar(1, IPv6Address);
+            });
+        });
+    }
+    else
+    {
+        $(newdiv).find(".btn[data-btn='offon']").remove();
+    }
+
+    
+    if (JIP_LookupDeviceTypes({IPv6Address: IPv6Address, DeviceTypes: JIP_DEVICETYPE_BULB_COLOR_C3}).length)
+    {
+        // Device has a BulbColour mib, so we can create the Colour control buttons
+
+        $(newdiv).find(".btn[data-btn='rgb']").click(function(event) {
+            $("#lightingColourImage").off('click').click(function(e) {
+                JIP_CancelPendingRequests();
+                
+                // Values the same as the hsv-shading.py script used to generate the original image.
+                var IMAGESIZE = 400;
+                var CENTRE = (this.width / IMAGESIZE) * 40.0;
+                var R = (this.width / IMAGESIZE) * 160.0;
+                var FULL = (this.width / IMAGESIZE) * 40.0;
+                
+                var x = e.pageX - $(this).offset().left;
+                var y = e.pageY - $(this).offset().top;
+                
+                var tx = x - (this.width / 2);
+                var ty = y - (this.height / 2);
+                var d = Math.sqrt(tx * tx + ty * ty)
+                
+                window.console && console.log("X:" + x + ", y:" + y);
+                
+                if ((x < 0) || (y < 0) || (x > this.width) || (y > this.height))
+                {
+                    window.console && console.log("Out of bounds");
+                    return;
+                }
+                
+                var hue, sat;
+                
+                if (d < CENTRE)
+                {
+                    hue = sat = 0;
+                }
+                else
+                {
+                    if (d <= R)
+                    {
+                        if (0 <= ty)
+                            hue = Math.acos(tx / d)
+                        else
+                            hue = 2 * Math.PI - Math.acos(tx / d)
+
+                        sat = (d / (R - CENTRE)) - (CENTRE / ((R - CENTRE)))
+                    }
+                    else if (d <= (R + FULL))
+                    {
+                        if (0 <= ty)
+                            hue = Math.acos(tx / d)
+                        else
+                            hue = 2 * Math.PI - Math.acos(tx / d)
+                        sat = 1.0;
+                    }
+                    else
+                    {
+                        hue = sat = 0;
+                    }
+                }
+            
+                // Convert to degrees
+                hue = hue * 360.0 / (2 * Math.PI);
+                
+                // Convert to JIP scaling
+                hue = hue * 10;
+                sat = sat * 255;
+                window.console && console.log("Hue:" + hue/10 + "°, Saturation:" + sat);
+
+                hue = ("0000" + Math.floor(hue).toString(16)).slice(-4);
+                sat = ("00" + Math.floor(sat).toString(16)).slice(-2);
+
+                window.console && console.log("Hue:" + hue + ", Saturation:" + sat);
+
+                var newcolour = "0x" + hue + sat;
+
+                $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "ColourControl", varName: "HueSatTarget"}), function(i, variable) {
+                    variable.SetVar(newcolour, IPv6Address);
+                });
+            });
+            
+            $("#lightingColour").find(".btn[data-btn='loopstart']").off('click').click(function(event)
+            {
+                $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "ColourControl", varName: "Mode"}), function(i, variable) {
+                    variable.SetVar(2, IPv6Address);
+                });
+            });
+            
+            $("#lightingColour").find(".btn[data-btn='loopstop']").off('click').click(function(event)
+            {
+                $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "ColourControl", varName: "Mode"}), function(i, variable) {
+                    variable.SetVar(0, IPv6Address);
+                });
+            });
+            
+            $('#lightingColour').modal('show');
+        });
+    }
+    else
+    {
+        $(newdiv).find(".btn[data-btn='rgb']").remove();
+    }
+
+    if (JIP_LookupDeviceTypes({IPv6Address: IPv6Address, DeviceTypes: [JIP_DEVICETYPE_BULB_COLOR_C2, JIP_DEVICETYPE_BULB_COLOR_C3]}).length)
+    {
+        $(newdiv).find(".btn[data-btn='temp']").click(function(event)
+        {
+            // Create the colour temperature control.
+            var kelvin_min = 0;
+            var kelvin_max = 10000;
+            
+            var c = document.getElementById("lightingColourTempImage");
+            var ctx = c.getContext("2d");
+            
+            var WIDTH = ctx.canvas.width = 400;//$("#lightingColourTempImage").width();
+            var HEIGHT = ctx.canvas.height = 400;//$("#lightingColourTempImage").height();
+            
+            // Ensure that the canvas is cleared.
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            
+            for (var y = 0; y < HEIGHT; y++)
+            {
+                // Scale temperature over height of canvas
+                var kelvin = kelvin_min + (kelvin_max-kelvin_min) * ((HEIGHT-y-1) / HEIGHT);
+
+                var c = colorTemperatureToRGB(kelvin);
+                ctx.fillStyle = c;
+                ctx.fillRect(WIDTH / 3,y,WIDTH / 3,1);
+                window.console && console.log("Y: " + y + " Kelvin: " + kelvin + " Colour: " + c);
+            }
+            
+            // Look up the font size & family that would be used for a span within the dialog
+            ctx.font = $("#lightingColourDescription").css("font-size") + " " + $("#lightingColourDescription").css("font-family");
+            ctx.fillStyle = "#000000"; // Black
+            
+            // Put 5 markers on the image
+            for (var kelvin = kelvin_min; kelvin < kelvin_max; kelvin += ((kelvin_max-kelvin_min) / 5))
+            {
+                var y = (kelvin - kelvin_min) / (kelvin_max-kelvin_min) * (HEIGHT);
+                ctx.fillText(kelvin + "\u00B0K", (2 * WIDTH / 3) + 10,HEIGHT-y-1);
+            }
+            
+            $("#lightingColourTempImage").off('click').click(function(e) {
+                JIP_CancelPendingRequests();
+                
+                // Handle click within the colour bar
+                var y = e.pageY - $(this).offset().top;
+                var kelvin = kelvin_max - ((y / $(this).height()) * (kelvin_max - kelvin_min));
+                var mireds = 1000000 / kelvin;
+                
+                window.console && console.log("Y: " + y + " Kelvin: " + kelvin + " Mireds: " + mireds);
+
+                $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "ColourControl", varName: "CctTarget"}), function(i, variable) {
+                   variable.SetVar(mireds, IPv6Address);
+                });
+            });
+            $('#lightingColourTemp').modal('show');
+        });
+    }
+    else
+    {
+        $(newdiv).find(".btn[data-btn='temp']").remove();
+    }
+    
+    var btnwidth = 100 / $(newdiv).find(".btn:not([data-btn='level'])").length;
+    $(newdiv).find(".btn:not([data-btn='level'])").css({width: (btnwidth - 1).toString() + "%"});
+    
+    if (JIP_LookupDeviceTypes({IPv6Address: IPv6Address, DeviceTypes: JIP_DEVICETYPE_BULB_ALL}).length)
+    {
+        // Device has a BulbControl:LumTarget variable, so we can activate the level control.
+        
+        $(newdiv).find(".progress").click(function(e) {
+            JIP_CancelPendingRequests();
+            var p = Math.round(((e.offsetX - 15) / (e.currentTarget.clientWidth)) * 100);
+
+            var dead = 5;   // Dead zone to make it easier to hit min / max on touch interfaces.
+            if (p < dead) {
+                p = 0;
+            } else if (p > (100-dead)) {
+                p = 100;
+            }
+
+            var bar = $(e.currentTarget).find(".progress-bar");
+            $(bar).css("width", p + "%").attr('aria-valuenow', p);
+            
+            var newVal = Math.round(p * (255/100));
+
+            $.each(JIP_LookupVars({IPv6Address: IPv6Address, mibName: "BulbControl", varName: "LumTarget"}), function(i, variable) {
+                variable.SetVar(newVal, IPv6Address);
+            });
+
+        });
+    }
+    else
+    {
+        // Remove the level control slider & make the buttons full width.
+        $(newdiv).find(".progress").remove();
+        $(newdiv).find(".btn:eq(0)").parent().removeClass("col-sm-5").addClass("col-sm-12");
+    }
+    
+    return newdiv;
+}
+
+
+// Function to be called when each request is started.
+JIP_RequestManager.addCallback("start", function(op_str) {
+    $("#progressDialog").modal('show');
+    $("#result").text(op_str);
+    $("#result").removeClass("alert-success").removeClass("alert-danger");    
+});
+
+// Function to be called when each request is completed.
+JIP_RequestManager.addCallback("done", function(op_str, data, remaining) {
+
+    $("#result").text([op_str, data.Status.Description].join(": "));
+
+    if (data.Status.Value == 0)
+    {
+        $("#result").addClass("alert-success")
+    }
+    else
+    {
+        $("#result").addClass("alert-danger")
+    }
+
+    if (remaining == 0)
+    {
+        if (data.Status.Value == 0)
+        {
+            timeout = 500;
+        } else {
+            timeout = 750;
+        }
+        
+        setTimeout(function() {
+            $("#progressDialog").modal('hide');
+        }, timeout);
+    }
+});
+
+
+// This function gets called for each discovered device, so we create the appropriate controls for that device here.
+JIP_DeviceCache.cbNode.push(function(node) {
+    var Control = undefined;
+
+    if (node.isDeviceType(JIP_DEVICETYPE_BULB_ALL))
+    {
+        /* Lamp device */
+        Control = vCreateLampControl("#tab_lighting_individual", node.IPv6Address, node.IPv6Address);
+    }
+
+    if (Control !== undefined)
+    {
+        node.parentContext.GetVar(node.MiBs[0].Vars[1], vDisplayNodeName, Control.find('h4:eq(0)')); 
+    }
+});
+
+
+function vDisplayNodeName(Status, element, variable)
+{
+    if (Status.Value == 0)
+    {
+        name = variable.Data;
+    
+        if (name != "")
+        {
+            // Make sure the node has a valid name string
+            $(element).html("<h4>" + name + "</h4>");
+        }
+    }
+}
+
+function vDiscoverNetworks(callback)
+{
+    if ((appState.BorderRouters === undefined) || (appState.BorderRouters.length < 1))
+    {
+        // If there are no border routers selected, don't do this.
+        alert("At least one border router must be selected");
+        return;
+    }
+    
+    // Clear down existing contexts & populated tabs.
+    JIP_Contexts.length = 0;
+    $("[data-tab][data-tab='devices']").empty();
+    
+    for (var bridx in appState.BorderRouters)
+    {
+        var br = appState.BorderRouters[bridx];
+        var ctx = new JIP_Context();
+        var discovered = 0;
+        
+        ctx.Connect(br);
+        ctx.Discover(function(Status, JIP_Context) {
+            discovered++;
+
+            /* Increment number of discovered networks. It this is the last one, trigger the requested callback */
+            if (discovered == JIP_Contexts.length)
+            {
+                var NumLightingDevices = $("#tab_lighting_individual hr").length;
+                if (NumLightingDevices)
+                {
+                    // Once all devices have been discovered, we can populate the global / group & scene controls.
+                    vCreateLampControl("#tab_lighting_global",  "All Devices",  "ff15::f00f");
+                    
+                    vCreateLampControl("#tab_lighting_group",   "Hall",         "ff15::a00a");
+                    vCreateLampControl("#tab_lighting_group",   "Lounge",       "ff15::b00b");
+                    
+                    vCreateSceneControl("#tab_lighting_scene",  "Home",         "ff15::f00f", 0xA00A, "/img/home.png");
+                    vCreateSceneControl("#tab_lighting_scene",  "Away",         "ff15::f00f", 0xB00B, "/img/away.png");
+                    vCreateSceneControl("#tab_lighting_scene",  "Movie",        "ff15::f00f", 0xC00C, "/img/tv.png");
+                    vCreateSceneControl("#tab_lighting_scene",  "Reading",      "ff15::f00f", 0xD00D, "/img/reading.png");
+                    
+                    $("#tab_lighting_global").prepend("<h4>Control " + NumLightingDevices + " lighting devices simultaneously</h4>");
+                    $("#tab_lighting_group").prepend("<h4>Control " + NumLightingDevices + " lighting devices in groups</h4>");
+                    $("#tab_lighting_individual").prepend("<h4>Control " + NumLightingDevices + " lighting devices individually</h4>");
+                    $("#tab_lighting_scene").prepend("<h4>Control " + NumLightingDevices + " lighting devices in scenes</h4>");
+                }
+                else
+                {
+                    $("[data-tab][data-devices][data-devices='Lighting']").append("<h4>No lighting devices found in network</h4>");
+                }
+                $(JIP_Contexts).each(function(i, JIP_Context)
+                {
+                    typeof callback === 'function' && callback();
+                });
+            }
+        });
+        JIP_Contexts.push(ctx);
+    }
+}
+
+
+//Function to be called upon change of tab
+$(function(){
+    $('a[data-toggle="tab"]').on('show.bs.tab', function (e) {
+        appState.activeTab = e.target.hash;
+        
+        // Hide the menu again on tab change
+        $("#menu").collapse("hide");
+        
+        if (appState.activeTab == "#tab_networks")
+        {
+            // Clear list of border routers
+            appState.BorderRouters  = undefined;
+            
+            JIP_DiscoverBRs(function (Status) {
+                vDisplayBorderRouters();
+            });
+        }
+        
+        // If the tab has a data-devices attribute, use it to reset the UI
+        if ($(this).attr('data-devices'))
+        {
+            // Hide all menu links that hava a data-devices attribute that doesn't match 
+            // the current tab, then show the ones that do match the current tab.
+            $("#menu [data-devices]:not([data-devices='" + $(this).attr('data-devices') + "'])").hide();
+            $("#menu [data-devices][data-devices='" + $(this).attr('data-devices') + "']").show();
+        
+            // Activate the relevant device type selecor in the settings menu
+            $("#menu [data-menu-devices]:not([data-menu-devices='" + $(this).attr('data-devices') + "'])").removeClass("active");
+            $("#menu [data-menu-devices][data-menu-devices='" + $(this).attr('data-devices') + "']").addClass("active");
+        
+            // Set navbar brand
+            $("span.navbar-brand").text("Smart " + $(this).attr('data-devices'));
+        }
+        else
+        {
+            $("#menu [data-devices]").hide();
+            $("#menu [data-menu-devices]").removeClass("active");
+            $("span.navbar-brand").text("Smart Devices");
+        }
+        
+        if ((history.state == null) || (history.state.activeTab != appState.activeTab))
+        {
+            history.pushState(appState, "", appState.activeTab);
+            
+            if(typeof(Storage) !== "undefined")
+            {
+                // If local storage is available, squirrel this away for later.
+                localStorage.appState = JSON.stringify(appState);
+            }
+        }
+    });
+});
+
+
+$(document).ready(function() {
+    
+    $(window).bind("load popstate", function(event) {
+        
+        if (!(window.history && history.pushState))
+        {
+            /* Browser doesn't support history */
+            
+            if (event.type == "load")
+            {
+                /* On load go to networks tab */
+                return $("#menu a[href='#tab_networks']").tab("show");
+            }
+            /* Otherwise just don't do anything */
+            return;
+        }
+        
+        if (history.state != null)
+        {
+            // Restore the application state
+            appState.activeTab = history.state.activeTab;
+            appState.BorderRouters = history.state.BorderRouters;
+        }
+        else if ((typeof(Storage) !== "undefined") && (localStorage.appState !== undefined))
+        {
+            // If local storage is available, and our app data has been saved there, restore it.
+            appState = JSON.parse(localStorage.appState);
+        }
+        else
+        {
+            /* Othrewise, this is the first load so go to the networks tab. */
+            return $("#menu a[href='#tab_networks']").tab("show");
+        }
+        
+        if (appState.activeTab === undefined)
+        {
+            /* If no active tab, activate networks tab */
+            return $("#menu a[href='#tab_networks']").tab("show");
+        }
+        
+        if (event.type == "load")
+        {
+            // On load, rediscover the network.
+            vDiscoverNetworks(function()
+            {
+                // And display the active tab
+                $("#menu a[href='" + appState.activeTab +"']").tab("show");
+                
+                // And display the version
+                JIP_GetVersion(function (Result) {
+                    if (Result.Status.Value == 0)
+                    {
+                        $("#footer").text("Smart Devices version " + Version + " using JIPcgi version " + Result.Version.JIPcgi + " & libJIP version " + Result.Version.libJIP);
+                    }
+                });
+            });
+        }
+        else
+        {
+            // On navigation, just display the active tab
+            $("#menu a[href='" + appState.activeTab +"']").tab("show");
+        }
+    });
+});
+
+function activateTab(tab)
+{
+    $("#menu a[href='" + tab +"']").tab("show");
+}
+
+        </script>
+        
+    </head>
+    <body>
+    
+<!-- Modal Colour control -->
+<div class="modal fade" id="lightingColour" tabindex="-1" role="dialog" aria-labelledby="lightingColourLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="lightingColourLabel">Change Colour</h2>
+      </div>
+      <div class="modal-body">
+        <span id="lightingColourDescription"></span>
+        <img id="lightingColourImage" src="/img/hsv-shading.png">
+      </div>
+      <div class="modal-footer">
+        <div class="btn-group pull-left">
+          <button type="button" class="btn btn-default" data-btn="loopstart">Start Loop</button>
+          <button type="button" class="btn btn-default" data-btn="loopstop">Stop Loop</button>
+        </div>
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+    
+<!-- Modal Colour temperature control -->
+<div class="modal fade" id="lightingColourTemp" tabindex="-1" role="dialog" aria-labelledby="lightingColourTempLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title" id="lightingColourTempLabel">Colour Temperature</h2>
+      </div>
+      <div class="modal-body">
+        <span id="lightingColourTempDescription"></span>
+        <canvas id="lightingColourTempImage"></canvas>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Progress Popup -->
+<div class="modal fade" id="progressDialog" tabindex="-1" role="dialog" aria-labelledby="progressDialogLabel" aria-hidden="true" data-backdrop="">
+<div class="modal-dialog pull-right panel panel-default" id="result_wrapper">
+    <div class="pull-left" id="result_spinner"></div>
+    <script>
+
+        // jquery extension for the spinner.
+        $.fn.spin = function(opts) {
+            this.each(function() {
+            var $this = $(this),
+                data = $this.data();
+
+            if (data.spinner) {
+                data.spinner.stop();
+                delete data.spinner;
+            }
+            if (opts !== false) {
+                data.spinner = new Spinner($.extend({color: $this.css('color')}, opts)).spin(this);
+            }
+            });
+            return this;
+        };
+        $('#result_spinner').spin({left:'30px'});
+
+        $("#progressDialog").click(function(event) { JIP_CancelPendingRequests(); $("#progressDialog").modal('hide'); });
+    </script>
+    <div id="result"></div>
+</div>
+</div>
+    
+        <div class="container content">
+            <div class="navbar navbar-default" role="navigation">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <img class="navbar-brand navbar-brand-img" src="img/NXP_logo.gif">
+                    <span class="navbar-brand">Smart Devices</span>
+                </div>
+                <div class="navbar-collapse collapse" id="menu">
+                    <ul class="nav nav-pills nav-justified">
+                    
+                        <!-- Lighting menu -->
+                        <li><a data-devices="Lighting"  href="#tab_lighting_global" data-toggle="tab">Global</a></li>   
+                        <li><a data-devices="Lighting"  href="#tab_lighting_group" data-toggle="tab">Groups</a></li>     
+                        <li><a data-devices="Lighting"  href="#tab_lighting_individual" data-toggle="tab">Individual</a></li>   
+                        <li><a data-devices="Lighting"  href="#tab_lighting_scene" data-toggle="tab">Scenes</a></li>   
+                    
+                        <!-- Heating menu -->
+                        <li><a data-devices="Heating"   href="#tab_heating" data-toggle="tab">Heating</a></li>   
+                    
+                        <li class="dropdown">
+                            <a class="dropdown-toggle" data-toggle="dropdown" href="#"><span class="glyphicon glyphicon-cog"></span> Settings<b class="caret"></b></a> 
+                            <ul class="dropdown-menu pull-right">
+                                <li><a href="javascript:void(0);" onclick='vDiscoverNetworks(function(){activateTab(appState.activeTab)})'><span class="glyphicon glyphicon-refresh"></span> Refresh devices</a></li>   
+                                
+                                <!--<li class="divider"></li>
+                                <li style="font-weight: bold">Device Classes</li>
+                                <li data-menu-devices="Lighting"><a href="javascript:void(0);" onclick="activateTab('#tab_lighting_global')">Lighting</a></li>
+                                <li data-menu-devices="Heating"><a href="javascript:void(0);" onclick="activateTab('#tab_heating')">Heating</a></li>-->
+ 
+                                <li class="divider"></li>
+                                <li><a href="#tab_networks" data-toggle="tab">Border Router Selection</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div><!--/.nav-collapse -->
+            </div>
+            
+            <div class="tab-content">
+                <div class="tab-pane fade in active" id="tab_networks">
+                    <h4>Border Router Selection</h4>
+                    <div class="row" id="tab_networks_brs">                    
+                        <script>
+function tab_networks_brs_add(br)
+{
+    var new_br = $("<div class='col'> <div class='input-group'><input type='text' class='form-control'> \
+        <span class='input-group-addon'><input type='checkbox' checked=true></span></div></div>");
+    
+    var test = $(new_br).find("input[type=text]")
+    
+    test.val(br);
+    test.attr('readonly', true)
+    
+    $("#tab_networks_brs").append(new_br);
+    return new_br;
+}
+
+function vDisplayBorderRouters()
+{
+    $("#tab_networks_brs").empty();
+    
+    for (var bridx in JIP_BRList)
+    {
+        tab_networks_brs_add(JIP_BRList[bridx]);
+    }
+}
+                        </script>
+                    </div>
+                    
+                    <div class="row" id="tab_networks_brs">
+                        
+                        <div class="input-group">
+                            <input type="text" id="tab_networks_add_txt" class="form-control">
+                            <span class="input-group-btn">
+                                <button id="tab_networks_add_btn" class="btn btn-default" type="button"><span class="glyphicon glyphicon-plus-sign"></span> Add</button>
+                            </span>
+                            <script>
+$("#tab_networks_add_btn").click(function(e) {
+    var br = $("#tab_networks_add_txt").val();
+    if (br.length)
+    {
+        tab_networks_brs_add(br);
+    }
+    $("#tab_networks_add_txt").val("");
+});
+                            </script>
+                        </div><!-- /input-group -->
+                    </div><!-- row -->
+                    <br />
+                    <div class="row">
+                        <div class="col">
+                            <button type="button" id="tab_networks_discover_btn" class="btn btn-primary"><span class="glyphicon glyphicon-search"></span> Discover Network(s)</button>
+                            <script>
+$("#tab_networks_discover_btn").click(function(e) {
+
+    var selected_brs = $("#tab_networks_brs").find("div.input-group")
+    if (appState.BorderRouters === undefined)
+    {
+        appState.BorderRouters = [];
+    }
+    else
+    {
+        appState.BorderRouters.length = 0;
+    }
+
+    // Update the list of border routers with those selected.
+    selected_brs.each(function(e, element) {
+        var select = $(element).find("input[type=checkbox]")[0];
+        if (select.checked == true)
+        {
+            var br = $(element).find("input[type=text]").val();
+            appState.BorderRouters.push(br);
+        }
+    })
+    
+    vDiscoverNetworks(function()
+    {
+        // Discover available networks, and then activate the lighting tab.
+        $("#menu a[href='#tab_lighting_global']").tab("show");
+    });
+});
+                            </script>
+                        </div>
+                    </div>
+                </div>
+
+                <div data-tab="devices" data-devices="Lighting" class="tab-pane fade" id="tab_lighting_global"></div>
+                <div data-tab="devices" data-devices="Lighting" class="tab-pane fade" id="tab_lighting_group"></div>
+                <div data-tab="devices" data-devices="Lighting" class="tab-pane fade" id="tab_lighting_individual"></div>
+                <div data-tab="devices" data-devices="Lighting" class="tab-pane fade" id="tab_lighting_scene"></div>
+                
+                <div data-tab="devices" data-devices="Lighting" class="tab-pane fade" id="tab_heating">Heating controls</div>
+
+            </div> <!-- tab-content -->
+        </div><!-- container -->
+
+        <div class="container">
+            <div id="footer">
+                Smart Devices version <script>document.write(Version)</script>
+            </div>
+        </div>
+    </body>
+</html>

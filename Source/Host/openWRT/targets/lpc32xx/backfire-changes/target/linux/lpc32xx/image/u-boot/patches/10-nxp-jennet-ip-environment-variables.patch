@@ -1,0 +1,265 @@
+diff --git a/include/configs/ea3250.h b/include/configs/ea3250.h
+index 0b47bfe..4848440 100644
+--- a/include/configs/ea3250.h
++++ b/include/configs/ea3250.h
+@@ -225,99 +225,174 @@
+ /*
+  * Network setup
+  */
+-#define CONFIG_NETMASK		255.255.255.0
+-#define CONFIG_IPADDR		192.168.1.101
+-#define CONFIG_SERVERIP		192.168.1.41
+-#define CONFIG_ETHADDR		00:1a:f1:00:00:00
+-#define CONFIG_GATEWAYIP	192.168.1.1
+-
+-#define CONFIG_BOOTFILE		uImage
+-#define CONFIG_LOADADDR		0x80100000
+-#define CONFIG_ROOTPATH		/home/user/ltib/rootfs
+-
+-/* Boot arguments for JFFS2 root file system in NAND */
+-#define MTDROOTCOMMAND "mtdboot="				\
+-	"setenv bootargs "					\
+-	"console=ttyS0,115200n8 "				\
+-	"root=/dev/mtdblock3 rw rootfstype=jffs2 "		\
+-	"ip=${ipaddr} ethaddr=${ethaddr}\0"
+-
+-/* Boot arguments for NFS based root file system */
+-#define NFSROOTCOMMAND "nfsboot="				\
+-	"setenv bootargs "					\
+-	"console=ttyS0,115200n8 "				\
+-	"root=/dev/nfs3 rw nfsroot=${serverip}:${rootpath} "	\
+-	"ip=${ipaddr} ethaddr=${ethaddr}\0"
+-
+-/* Boot arguments for ramdisk image loaded via TFTP */
+-#define RDROOTCOMMAND "ramdiskboot="				\
+-	"setenv bootargs "					\
+-	"console=ttyS0,115200n8 "				\
+-	"root=/dev/ram0 rw "					\
+-	"ip=${ipaddr} ethaddr=${ethaddr}\0"
+-
+-/* Kernel boot using tftp with static IP */
+-#define TFTPSTATICIPKERNELBOOT "tftpstatickernel="		\
+-	"tftpboot ${loadaddr} ${serverip}:${bootfile}\0"
+-
+-/* Kernel boot using tftp with DHCP obtained IP Address */
+-#define TFTPDHCPKERNELBOOT "tftpdhcpkernel=dhcp\0"
+-
+-/*Kernel boot from NAND */
+-#define MTDKERNELBOOT "mtdkernel=nboot.jffs2 ${loadaddr} "	\
+-	"0 0x00140000\0"
+-
+-/* Command to burn kernel image into NAND FLASH */
+-#define MTDKERNELBURN "mtdkernelburn="				\
+-	"nand erase 0x00140000 0x00400000;"			\
+-	"nand write.jffs2 ${loadaddr} 0x00140000 0x00400000\0"
+-
+-/* Root filesystem image name and load address */
+-#define ROOTFSNAME "rootfile=rootfs.jffs2\0"
+-#define ROOTFSLOADADDR "rootloadaddr=0x82000000\0"
+-#define ROOTFSLOADSIZE "rootloadsize=0x01000000\0"
+-
+-/* Load JFFS2 root file system using TFTP with static IP */
+-#define TFTPSTATICROOTFSLOAD "tftpstaticloadroot="		\
+-	"tftpboot ${rootloadaddr} ${serverip}:${rootfile}\0"
+-
+-/* Load JFFS2 root file system using TFTP with DHCP */
+-#define TFTPDHCPROOTFSLOAD "tftpdhcploadroot="			\
+-	"dhcp ${rootloadaddr} ${serverip}:${rootfile}\0"
+-
+-/* Command to load root file system into RAM (ramdisk) */
+-#define RDROOTFSLOAD "ramdiskload="				\
+-	"nand read.jffs2 ${rootloadaddr} 0x00540000 "		\
+-	"${rootloadsize}\0"
+-
+-/* Command to burn root file system image into NAND FLASH */
+-#define MTDROOTBURN "mtdrootburn="				\
+-	"nand erase 0x00540000 0x07AC0000;"			\
+-	"nand write.jffs2 ${rootloadaddr} 0x00540000"		\
+-	" ${rootloadsize}\0"
++#define CONFIG_NETMASK      255.255.255.0
++#define CONFIG_IPADDR       192.168.11.200
++#define CONFIG_SERVERIP     192.168.11.5
++
++#define CONFIG_ETHADDR      00:15:8d:00:00:00
++#define CONFIG_GATEWAYIP    192.168.11.1
++
++#define CONFIG_BOOTFILE     uImage.lpc32xx
++#define CONFIG_LOADADDR     0x80100000
++#define CONFIG_ROOTPATH     /root.lpc32xx
++
++/*
++ * Flash layout 
++ */
++
++/* Uboot location in flash */
++#define NAND_UBOOT_OFF  "nand_uboot_off=0x80000\0"
++/* Uboot size in flash */
++#define NAND_UBOOT_SZ   "nand_uboot_sz=0xC0000\0"
++
++/* Kernel location in flash */
++#define NAND_KERNEL_OFF "nand_kernel_off=0x140000\0"
++/* Kernel size in flash */
++#define NAND_KERNEL_SZ  "nand_kernel_sz=0x400000\0"
++
++/* Rootfs location in flash */
++#define NAND_ROOTFS_OFF "nand_rootfs_off=0x540000\0"
++/* Rootfs size in flash */
++#define NAND_ROOTFS_SZ  "nand_rootfs_sz=0x7AC0000\0"
++
++/*
++ * Filenames 
++ */
++
++/* Uboot filename */
++#define FILE_UBOOT      "ubootfile=u-boot.lpc32xx.bin\0"
++
++/* Rootfs filename */
++#define FILE_ROOTFS     "rootfsfile=rootfs.jffs2\0"
++
++
++/*
++ * UBoot update 
++ */
++
++/* TFTP uboot image */
++#define TFTP_UBOOT      "loaduboot_tftp=tftpboot ${loadaddr} ${ubootfile}\0"
++
++/* Update uboot image */
++#define UPDATE_UBOOT    "update_uboot=run loaduboot_tftp;" \
++                        "nand erase ${nand_uboot_off} ${nand_uboot_sz};"  \
++                        "nand write.jffs2 ${loadaddr} ${nand_uboot_off} ${nand_uboot_sz}\0"
++
++/*
++ * Kernel update 
++ */
++
++/* TFTP Kernel image */
++#define TFTP_KERNEL		"loadkernel_tftp=tftpboot ${loadaddr} ${bootfile}\0"
++
++/* USB Kernel image */
++#define USB_KERNEL		"loadkernel_usb=usb start;" \
++                           "fatload usb 0 ${loadaddr} ${bootfile};" \
++                           "usb stop\0"
++
++/* Load kernel from nand */
++#define NAND_KERNEL     "loadkernel_nand=nboot.jffs2 ${loadaddr} 0x0 ${nand_kernel_off}\0"
++
++/* Point load kernel at load from nand */
++#define LOAD_KERNEL     "loadkernel=run loadkernel_nand\0"
++
++/* Burn Kernel image */
++#define BURN_KERNEL   "burn_kernel=nand erase ${nand_kernel_off} ${nand_kernel_sz};" \
++                      "nand write.jffs2 ${loadaddr} ${nand_kernel_off} ${nand_kernel_sz}\0"
++
++/* Update Kernel image using tftp */
++#define UPDATE_KERNEL_TFTP  "update_kernel_tftp=run loadkernel_tftp;" \
++                            "run burn_kernel\0"
++
++/* Update Kernel image using usb */
++#define UPDATE_KERNEL_USB  "update_kernel_usb=run loadkernel_usb;" \
++                           "run burn_kernel\0"
++
++/* Update Kernel image using tftp */
++#define UPDATE_KERNEL  "update_kernel=run update_kernel_tftp;\0"
++
++/*
++ * Rootfs update 
++ */
++
++/* TFTP Rootfs image */
++#define TFTP_ROOTFS	"loadrootfs_tftp=tftpboot ${loadaddr} ${rootfsfile}\0"
++
++/* USB Rootfs image */
++#define USB_ROOTFS	"loadrootfs_usb=usb start;" \
++                    "fatload usb 0 ${loadaddr} ${rootfsfile};" \
++                    "usb stop\0"
++
++/* Burn Rootfs image */
++#define BURN_ROOTFS   "burn_rootfs=nand erase ${nand_rootfs_off} ${nand_rootfs_sz};" \
++                      "nand write.jffs2 ${loadaddr} ${nand_rootfs_off} ${filesize}\0"
++
++/* Update Rootfs image using tftp */
++#define UPDATE_ROOTFS_TFTP "update_rootfs_tftp=run loadrootfs_tftp;" \
++                           "run burn_rootfs\0"
++
++/* Update Rootfs image using usb */
++#define UPDATE_ROOTFS_USB "update_rootfs_usb=run loadrootfs_usb;" \
++                          "run burn_rootfs\0"
++                          
++/* Update Rootfs image using tftp */
++#define UPDATE_ROOTFS "update_rootfs=run update_rootfs_tftp;\0"
++
++/*
++ * Update firmware
++ */
++#define UPDATE_FIRMWARE "update_firmware=run update_kernel; run update_rootfs\0"
++
++/*
++ * Boot 
++ */
++
++/* Set up boot from mtd kernel command line */
++#define BOOTARGS_MTD    "mtdboot=setenv bootargs root=/dev/mtdblock3 rw " \
++                        "rootfstype=jffs2 ip=${ipaddr} ethaddr=${ethaddr} console=ttyS0,115200n8\0"
++
++/* Set up boot from nfs kernel command line */
++#define BOOTARGS_NFS    "nfsboot=setenv bootargs root=/dev/nfs rw nfsroot=${serverip}:${rootpath} " \
++                        "ip=${ipaddr} ethaddr=${ethaddr} console=ttyS0,115200n8\0"
++
+ 
+ /*
+  * Other preset environment variables and example bootargs string
+  */
+-#define CONFIG_EXTRA_ENV_SETTINGS				\
+-	MTDROOTCOMMAND						\
+-	NFSROOTCOMMAND						\
+-	RDROOTCOMMAND						\
+-	TFTPSTATICIPKERNELBOOT					\
+-	TFTPDHCPKERNELBOOT					\
+-	MTDKERNELBOOT						\
+-	MTDKERNELBURN						\
+-	ROOTFSNAME						\
+-	ROOTFSLOADADDR						\
+-	ROOTFSLOADSIZE						\
+-	TFTPSTATICROOTFSLOAD					\
+-	TFTPDHCPROOTFSLOAD					\
+-	RDROOTFSLOAD						\
+-	MTDROOTBURN
++#define CONFIG_EXTRA_ENV_SETTINGS \
++	NAND_UBOOT_OFF				\
++	NAND_UBOOT_SZ				\
++	NAND_KERNEL_OFF				\
++	NAND_KERNEL_SZ				\
++	NAND_ROOTFS_OFF				\
++	NAND_ROOTFS_SZ				\
++	FILE_UBOOT					\
++	FILE_ROOTFS					\
++	TFTP_UBOOT					\
++	UPDATE_UBOOT				\
++	TFTP_KERNEL					\
++	USB_KERNEL					\
++	NAND_KERNEL					\
++	LOAD_KERNEL					\
++	BURN_KERNEL					\
++	UPDATE_KERNEL_TFTP			\
++	UPDATE_KERNEL_USB			\
++	UPDATE_KERNEL				\
++	TFTP_ROOTFS					\
++	USB_ROOTFS					\
++	BURN_ROOTFS					\
++	UPDATE_ROOTFS_TFTP			\
++	UPDATE_ROOTFS_USB			\
++	UPDATE_ROOTFS				\
++	UPDATE_FIRMWARE				\
++	BOOTARGS_MTD				\
++	BOOTARGS_NFS
++
+ 
+ /* Default boot command */
+ #define CONFIG_BOOTCOMMAND					\
+-	"run nfsboot;run tftpstatickernel; bootm ${loadaddr}"
++	"setenv bootcmd 'run mtdboot;run loadkernel; bootm ${loadaddr}';saveenv;run bootcmd"
++/* Default boot command saves the environment into sector 8 of flash so it can be read/modified by Linux userspace. */
+ 
+ /*
+  * BOOTP options

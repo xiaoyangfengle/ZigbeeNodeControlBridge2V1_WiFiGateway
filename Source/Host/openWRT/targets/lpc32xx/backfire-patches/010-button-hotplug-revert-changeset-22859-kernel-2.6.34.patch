@@ -1,0 +1,72 @@
+Index: backfire/package/button-hotplug/src/button-hotplug.c
+===================================================================
+--- backfire/package/button-hotplug/src/button-hotplug.c	(revision 28080)
++++ backfire/package/button-hotplug/src/button-hotplug.c	(revision 22858)
+@@ -21,10 +21,10 @@
+ #include <linux/workqueue.h>
+ #include <linux/skbuff.h>
+ #include <linux/netlink.h>
+-#include <linux/kobject.h>
++#include <net/sock.h>
+ 
+ #define DRV_NAME	"button-hotplug"
+-#define DRV_VERSION	"0.4.1"
++#define DRV_VERSION	"0.4.0"
+ #define DRV_DESC	"Button Hotplug driver"
+ 
+ #define BH_SKB_SIZE	2048
+@@ -64,6 +64,7 @@
+ 	const char	*name;
+ };
+ 
++extern struct sock *uevent_sock;
+ extern u64 uevent_next_seqnum(void);
+ 
+ #define BH_MAP(_code, _name)		\
+@@ -159,6 +160,9 @@
+ 	struct bh_event *event = container_of(work, struct bh_event, work);
+ 	int ret = 0;
+ 
++	if (!uevent_sock)
++		goto out_free_event;
++
+ 	event->skb = alloc_skb(BH_SKB_SIZE, GFP_KERNEL);
+ 	if (!event->skb)
+ 		goto out_free_event;
+@@ -172,7 +176,7 @@
+ 		goto out_free_skb;
+ 
+ 	NETLINK_CB(event->skb).dst_group = 1;
+-	broadcast_uevent(event->skb, 0, 1, GFP_KERNEL);
++	netlink_broadcast(uevent_sock, event->skb, 0, 1, GFP_KERNEL);
+ 
+  out_free_skb:
+ 	if (ret) {
+Index: backfire/package/button-hotplug/Makefile
+===================================================================
+--- backfire/package/button-hotplug/Makefile	(revision 28080)
++++ backfire/package/button-hotplug/Makefile	(revision 22858)
+@@ -1,5 +1,5 @@
+ #
+-# Copyright (C) 2008-2010 OpenWrt.org
++# Copyright (C) 2008 OpenWrt.org
+ #
+ # This is free software, licensed under the GNU General Public License v2.
+ # See /LICENSE for more information.
+@@ -9,7 +9,7 @@
+ include $(INCLUDE_DIR)/kernel.mk
+ 
+ PKG_NAME:=button-hotplug
+-PKG_RELEASE:=3
++PKG_RELEASE:=2
+ 
+ include $(INCLUDE_DIR)/package.mk
+ 
+@@ -17,7 +17,6 @@
+   SUBMENU:=Other modules
+   TITLE:=Button Hotplug driver
+   FILES:=$(PKG_BUILD_DIR)/button-hotplug.ko
+-  AUTOLOAD:=$(call AutoLoad,30,button-hotplug)
+   KCONFIG:=
+ endef
+ 

@@ -1,0 +1,50 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2013 NXP Semiconductor
+
+START=99
+
+PROG=NFCd
+
+start_NFCd() {
+    local section="$1"
+
+    config_get_bool ignore "$section" ignore 0
+    [ "$ignore" -ne 0 ] && return 0
+
+    local gpio_pwr
+    config_get gpio_pwr "${section}" gpio_pwr
+    [ -z $gpio_pwr ] && gpio_pwr='/sys/class/gpio/gpo23'
+
+    local gpio_fd
+    config_get gpio_fd "${section}" gpio_fd
+    [ -z $gpio_fd ] && gpio_fd='/sys/class/gpio/gpio01'
+
+    local i2c_bus
+    config_get i2c_bus "${section}" i2c_bus
+    [ -z $i2c_bus ] && i2c_bus="/dev/i2c-1"
+
+    local i2c_address
+    config_get i2c_address "${section}" i2c_address
+    [ -z $i2c_address ] && i2c_address="0x55"
+
+    local args
+    args="--gpio-fd=$gpio_fd/value --i2c-bus=$i2c_bus --i2c-address=$i2c_address --gpio-pwr=$gpio_pwr/value"
+    
+    # Set up field detect pin direction / edge
+    echo "in" > "$gpio_fd/direction"
+    echo "falling" > "$gpio_fd/edge"
+
+    echo "Starting $PROG with arguments: $args"
+    /usr/sbin/$PROG $args &
+}
+
+start () {
+    config_load NFCd
+    config_foreach start_NFCd NFCd
+}
+
+
+stop () {
+    killall $PROG
+}
+

@@ -1,0 +1,3 @@
+config FWDistributiond
+    option ignore   0
+    option FWdir    /var/nxp/firmware

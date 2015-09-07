@@ -1,0 +1,2 @@
+os_irq_illegalinstruction.o: \
+ c:/NXP/bstudio_nxp/workspace/ZigbeeNodeControlBridge2V1_WiFiGateway/Source/ZigbeeNodeControlBridge/os_irq_illegalinstruction.S

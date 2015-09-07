@@ -1,0 +1,28 @@
+--- backfire/Config.in
++++ backfire/Config.in
+@@ -86,6 +86,13 @@
+ 		help
+ 		  Build a jffs2 root filesystem
+ 
++	config TARGET_ROOTFS_JFFS2_NAND
++		bool "jffs2 image for NAND flash device (no cleanmarkers)"
++		default n
++		depends TARGET_ROOTFS_JFFS2
++		help
++			Build a jffs2 root filesystem for a NAND flash device (no cleanmarkers)
++
+ 	config TARGET_ROOTFS_SQUASHFS
+ 		bool "squashfs"
+ 		default y if USES_SQUASHFS
+--- backfire/include/image.mk
++++ backfire/include/image.mk
+@@ -41,6 +41,9 @@
+ ifneq ($(CONFIG_JFFS2_LZMA),y)
+   JFFS2OPTS += -x lzma
+ endif
++ifeq ($(CONFIG_TARGET_ROOTFS_JFFS2_NAND),y)
++  JFFS2OPTS += -n
++endif
+ 
+ SQUASHFSCOMP := gzip
+ LZMA_XZ_OPTIONS := -Xpreset 9 -Xe -Xlc 0 -Xlp 2 -Xpb 2

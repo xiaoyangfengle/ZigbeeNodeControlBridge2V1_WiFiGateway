@@ -1,0 +1,7 @@
+
+config button
+        option button   BTN_1
+        option action   released
+        option handler  "/sbin/factory-reset.sh"
+        option min             20
+        option max             30

@@ -1,0 +1,20 @@
+config 6LoWPANd tun0
+    option 'ignore'      '1'
+    option 'secure'      '1'
+    option 'jennet_key'  '::1'
+    option 'auth_scheme' '1'
+    option 'radius_ip'   'fd04:bd3:80e8:1::1'
+    option 'tty'         '/dev/ttyUSB0'
+    option 'interface'   'tun0'
+    option 'baudrate'    '1000000'
+    option 'activityled' 'none'
+    option 'channel'     '0'
+    option 'pan'         '0xffff'
+    option 'jennet'      '0x11111111'
+    option 'prefix'      'fd04:bd3:80e8:2::'
+    option 'qos_enable'  '0'
+
+config JIPd
+    option ignore   1
+    option listen4  0.0.0.0
+    option port     1875

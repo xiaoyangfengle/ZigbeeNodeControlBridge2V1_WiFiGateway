@@ -1,0 +1,25 @@
+diff --git a/board/ea3250/ea3250.c b/board/ea3250/ea3250.c
+index 09d8f46..462f749 100644
+--- a/board/ea3250/ea3250.c
++++ b/board/ea3250/ea3250.c
+@@ -232,7 +232,7 @@ static int isp1301_get_value(int reg)
+ 	OTG->otg_i2c.otg_i2c_txrx = ((ISP1301_I2C_ADDR << 1) | I2C_START_BIT);   
+ 
+ 	/* register (offset) to read from */
+-	OTG->otg_i2c.otg_i2c_txrx = reg;   
++	OTG->otg_i2c.otg_i2c_txrx = (reg & 0xff);   
+ 
+ 	/* repeat start */
+ 	OTG->otg_i2c.otg_i2c_txrx = ((ISP1301_I2C_ADDR << 1) | I2C_START_BIT | I2C_READ);
+@@ -259,9 +259,9 @@ static int isp1301_set_value(int reg, int value)
+ 	OTG->otg_i2c.otg_i2c_txrx = ((ISP1301_I2C_ADDR << 1) | I2C_START_BIT);   
+ 
+ 	/* offset to write to */
+-	OTG->otg_i2c.otg_i2c_txrx = (reg | I2C_WRITE);   
++	OTG->otg_i2c.otg_i2c_txrx = ((reg & 0xff) | I2C_WRITE);   
+ 	/* value to write */
+-	OTG->otg_i2c.otg_i2c_txrx = (value | I2C_STOP_BIT);  
++	OTG->otg_i2c.otg_i2c_txrx = ((value & 0xff) | I2C_STOP_BIT);  
+   
+ 	/* wait for transmit done (TDI) */
+ 	while (((OTG->otg_i2c.otg_i2c_stat & I2C_TDI) != I2C_TDI) && n++ < 100000);

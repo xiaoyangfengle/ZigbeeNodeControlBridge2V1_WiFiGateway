@@ -1,0 +1,31 @@
+
+/******** Style for Factory test cgi pages ********/
+
+body{
+    font:Verdana,Tahoma,Arial,sans-serif;
+    background-color: #FFFFFF;
+}
+
+h2 {
+    text-align:center;
+}
+
+/******** Menu pane ********/
+
+#menu {
+    width:25%;
+    float: left;
+}
+
+#menu li {
+    list-style-type:none;
+    margin: 10px;
+}
+
+/******** Content pane ********/
+
+#content {
+    width: 75%;
+    float: left;
+}
+

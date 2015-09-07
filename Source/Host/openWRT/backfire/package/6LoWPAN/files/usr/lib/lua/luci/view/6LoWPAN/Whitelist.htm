@@ -1,0 +1,299 @@
+<%#
+LuCI - Lua Configuration Interface
+Copyright 2008 Steven Barth <steven@midlink.org>
+Copyright 2008-2009 Jo-Philipp Wich <xm@subsignal.org>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+$Id: upgrade.htm 5458 2009-10-31 20:03:27Z jow $
+
+-%>
+
+<%-
+
+--[[
+Ordered table iterator, allow to iterate on the natural order of the keys of a
+table.
+]]
+
+function __genOrderedIndex( t )
+    local orderedIndex = {}
+    for key in pairs(t) do
+        table.insert( orderedIndex, key )
+    end
+    table.sort( orderedIndex )
+    return orderedIndex
+end
+
+function orderedNext(t, state)
+    -- Equivalent of the next function, but returns the keys in the alphabetic
+    -- order. We use a temporary ordered key table that is stored in the
+    -- table being iterated.
+
+    --print("orderedNext: state = "..tostring(state) )
+    if state == nil then
+        -- the first time, generate the index
+        t.__orderedIndex = __genOrderedIndex( t )
+        key = t.__orderedIndex[1]
+        return key, t[key]
+    end
+    -- fetch the next value
+    key = nil
+    for i = 1,table.getn(t.__orderedIndex) do
+        if t.__orderedIndex[i] == state then
+            key = t.__orderedIndex[i+1]
+        end
+    end
+
+    if key then
+        return key, t[key]
+    end
+
+    -- no more value to return, cleanup
+    t.__orderedIndex = nil
+    return
+end
+
+function orderedPairs(t)
+    -- Equivalent of the pairs() function on tables. Allows to iterate
+    -- in order
+    return orderedNext, t, nil
+end
+
+
+-%>
+
+<%+header%>
+
+<% 
+
+if (info) then
+    luci.http.write(info)
+end
+
+--[[
+for node_address,node_info in orderedPairs(nodes) do
+    luci.http.write(node_address .. " - " .. node_info.key ..  " (".. node_info.enable .. ")<br />")
+end 
+]]--
+
+%>
+
+
+
+<script type="text/javascript">//<![CDATA[
+
+function add_node()
+{
+    var tbl = document.getElementById('NodeTable');
+    var lastRow = tbl.rows.length;
+    var iteration = lastRow-1;
+    var row = tbl.insertRow(lastRow);
+
+    row.className ='cbi-section-table-row cbi-rowstyle-1';
+    
+    // Enable cell
+    var cellEnable = row.insertCell(0);
+    cellEnable.className = 'cbi-value-field';
+    var el = document.createElement('input');
+    el.type = 'checkbox';
+    el.name = 'node_enable';
+    el.id = 'node_enable_' + iteration;
+    el.className = 'cbi-input-checkbox'
+    el.value=iteration
+    el.checked='checked' 
+    cellEnable.appendChild(el);
+    
+    // Address cell
+    var cellAddress = row.insertCell(1);
+    cellAddress.className = 'cbi-value-field';
+    var el = document.createElement('input');
+    el.type = 'text';
+    el.name = 'node_address'
+    el.style.width = '150px'
+    el.id = 'node_address_' + iteration
+    cellAddress.appendChild(el);
+
+    cbi_validate_field(el.id, false, 'mac_address');
+    el.onchange = function(){ document.getElementById('node_enable_' + iteration).value = this.value;};
+    
+    // Key cell
+    var cellKey = row.insertCell(2);
+    cellKey.className = 'cbi-value-field';
+    var el   = document.createElement('input');
+    el.type  = 'text';
+    el.name  = 'node_key';
+    el.style.width = '300px';
+    el.id = 'node_key_' + iteration
+    cellKey.appendChild(el);
+
+    cbi_validate_field(el.id, false, 'key');
+
+    // Delete cell
+    var cellDelete = row.insertCell(3);
+    cellDelete.className = 'cbi-value-field';
+    var el = document.createElement('img');
+    el.alt = 'Delete';
+    el.onclick = new Function('delete_node(this);');
+    el.src = '/luci-static/resources/cbi/remove.gif';
+    cellDelete.appendChild(el);
+
+    
+}
+
+function delete_node(row)
+{
+    var index=row.parentNode.parentNode.rowIndex;
+    document.getElementById('NodeTable').deleteRow(index);
+}
+
+
+//]]></script>
+
+<div class="cbi-map" id="cbi-Whitelist">
+<h2><a id="content" name="content">Node Whitelist</a></h2>
+<div class="cbi-map-descr">
+<div>
+When security is enabled in the JenNet-IP network, only known nodes are allowed to join the network.
+Here the nodes that are allowed to join the network can be configured.
+</div><div>
+The list below shows all nodes that have requested to join the network. 
+Nodes that are whitelisted to join the network can be selected using the "Allowed" checkboxes.
+</div>
+</div>
+
+<form method="post" name="cbi" action="<%=REQUEST_URI%>" enctype="multipart/form-data"
+onreset="return cbi_validate_reset(this)" onsubmit="return cbi_validate_form(this, 'Some fields are invalid, cannot save values!')"
+>
+<div>
+<script type="text/javascript" src="/luci-static/resources/cbi.js"></script>
+<script type="text/javascript">//<![CDATA[
+
+cbi_validators['mac_address'] = function()
+{
+    return ((this.length == 16) && (this.match(/^[a-fA-F0-9]+$/) != null));
+}
+
+cbi_validators['key'] = function()
+{
+    return ((this.match(/^[a-fA-F0-9]+$/) != null) && (this.length == 32));
+}
+
+
+//]]></script>
+<!--    <input type="hidden" name="cbi.submit" value="1" />
+    <input type="submit" value="Save" class="hidden" />
+-->
+</div>
+
+
+<% if (action == "apply") then %>
+<div>
+<fieldset class="cbi-section" id="cbi-apply-nodes">
+    <legend>Applying changes</legend>
+    <script type="text/javascript">//<![CDATA[
+        function applied_changes() {
+            var e = document.getElementById('cbi-apply-nodes-status');
+            if( e )
+            {
+                e.innerHTML = 'Configuration applied.';
+                window.setTimeout(function() {
+                    e.parentNode.style.display = 'none';
+                }, 1000);
+            }
+            var u = document.getElementById('unsaved_changes');
+            if ( u )
+            {
+                u.style.display = 'none';
+            }
+        }
+
+    window.setTimeout(applied_changes, 1000);
+    //]]></script>
+
+    <img src="/luci-static/resources/icons/loading.gif" alt="Loading" style="vertical-align:middle" />
+    <span id="cbi-apply-nodes-status">Waiting for router...</span>
+</fieldset><!-- tblsection -->
+</div>
+<% end %>
+
+<div class="cbi-error" id="unsaved_changes" <% if (not unsaved_changes) then luci.http.write("style=\"display:none\"") end %>>Note: There are unsaved changes</div>
+
+<fieldset class="cbi-section">
+<legend>Known Nodes</legend>
+
+    <div class="cbi-section-descr"></div>
+    <div class="cbi-section-node">
+        <table class="cbi-section-table" id="NodeTable">
+          <tbody>
+            <tr class="cbi-section-table-titles">
+                <th class="cbi-section-table-cell" style="width:50px">Allowed</th>
+                <th class="cbi-section-table-cell" style="width:50%">MAC Address</th>
+                <th class="cbi-section-table-cell" style="width:50%">Commisioning Key</th>
+                <th class="cbi-section-table-cell" style="width:30px">&#160;</th>
+            </tr>
+
+            <tr class="cbi-section-table-descr">
+                <th class="cbi-section-table-cell" style="width:30px"></th>
+                <th class="cbi-section-table-cell"></th>
+                <th class="cbi-section-table-cell"></th>
+                <th class="cbi-section-table-cell"></th>
+            </tr>
+
+<%
+local row_number = 0
+for node_address,node_info in orderedPairs(nodes) do 
+%>
+            
+            <tr class="cbi-section-table-row cbi-rowstyle-1">
+            
+                <td class="cbi-value-field">
+                <div>
+                    <input class="cbi-input-checkbox" type="checkbox" name="node_enable" id="node_enable_<%=row_number%>" value="<%=node_address %>" <% if (node_info.enable == '1') then luci.http.write("checked=\"checked\"") end %> />
+                    </div>
+                </td>
+
+                <td class="cbi-value-field">
+                <div>
+                    <%=node_address %>
+                    <input type="hidden" name="node_address" value="<%=node_address %>" />
+                </div>
+                </td>
+
+                <td class="cbi-value-field">
+                    <input style="width:300px" name="node_key" id="node_key_<%=row_number%>" onchange="cbi_d_update(this.id)" value="<%= node_info.key %>" />
+                    <script type="text/javascript">
+                        cbi_validate_field('node_key_<%=row_number%>', false, 'key');
+                    </script>
+                </td>
+                <td>
+                    <img onclick="delete_node(this);" alt="Delete" src="/luci-static/resources/cbi/remove.gif" />
+                </td>
+            </tr>
+            
+<% row_number=row_number+1 end %>
+          </tbody>
+        </table> 
+        <div class="cbi-section-create cbi-tblsection-create">
+            <input class="cbi-button cbi-button-add" type="button" value="Add" name="cbi.cts.6LoWPAN.6LoWPANd" title="Add" onclick="add_node();"/>
+                    
+        </div>
+    </div>
+
+</fieldset>
+<div class="cbi-page-actions">
+    <input class="cbi-button cbi-button-apply" type="submit" name="apply" value="Save &#38; Apply" />
+    <input class="cbi-button cbi-button-save"  type="submit" name="save"  value="Save" />
+    <input class="cbi-button cbi-button-reset" type="submit" name="reset" value="Reset" />
+
+    <script type="text/javascript">cbi_d_update();</script>
+</div></form>
+
+</div>
+
+<%+footer%>
+

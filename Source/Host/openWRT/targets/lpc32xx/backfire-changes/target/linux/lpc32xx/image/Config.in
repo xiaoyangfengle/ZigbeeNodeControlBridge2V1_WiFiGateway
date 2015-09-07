@@ -1,0 +1,13 @@
+config LPC32XX_UBOOT
+	bool "Build U-Boot bootloader"
+	depends TARGET_lpc32xx
+	default n
+
+config UBOOT_TARGET
+	string "U-Boot target board"
+	depends LPC32XX_UBOOT
+	default "ea3250"
+	help
+	  For all supported boards there are ready-to-use default
+		configurations available; just type "<board_name>".
+

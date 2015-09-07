@@ -1,0 +1,474 @@
+diff -Naur freeradius-server-2.1.10/raddb/modules/greylist freeradius-server-2.1.10-new/raddb/modules/greylist
+--- freeradius-server-2.1.10/raddb/modules/greylist	1970-01-01 01:00:00.000000000 +0100
++++ freeradius-server-2.1.10-new/raddb/modules/greylist	2012-02-27 09:39:15.687180296 +0000
+@@ -0,0 +1,9 @@
++# -*- text -*-
++#
++#  $Id$
++
++# Greylist module to greylist any users that have not been authenticated by other modules.
++
++greylist {
++	script = /usr/bin/greylist.sh
++}
+diff -Naur freeradius-server-2.1.10/src/modules/rlm_greylist/Makefile freeradius-server-2.1.10-new/src/modules/rlm_greylist/Makefile
+--- freeradius-server-2.1.10/src/modules/rlm_greylist/Makefile	1970-01-01 01:00:00.000000000 +0100
++++ freeradius-server-2.1.10-new/src/modules/rlm_greylist/Makefile	2012-02-27 09:39:15.688180284 +0000
+@@ -0,0 +1,10 @@
++#
++# Makefile
++#
++# Version:	$Id$
++#
++
++TARGET      = rlm_greylist
++SRCS        = rlm_greylist.c
++
++include ../rules.mak
+diff -Naur freeradius-server-2.1.10/src/modules/rlm_greylist/rlm_greylist.c freeradius-server-2.1.10-new/src/modules/rlm_greylist/rlm_greylist.c
+--- freeradius-server-2.1.10/src/modules/rlm_greylist/rlm_greylist.c	1970-01-01 01:00:00.000000000 +0100
++++ freeradius-server-2.1.10-new/src/modules/rlm_greylist/rlm_greylist.c	2012-02-27 11:57:45.579292349 +0000
+@@ -0,0 +1,217 @@
++/*
++ * rlm_greylist.c
++ *
++ * Version:  $Id$
++ *
++ *   This program is free software; you can redistribute it and/or modify
++ *   it under the terms of the GNU General Public License as published by
++ *   the Free Software Foundation; either version 2 of the License, or
++ *   (at your option) any later version.
++ *
++ *   This program is distributed in the hope that it will be useful,
++ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *   GNU General Public License for more details.
++ *
++ *   You should have received a copy of the GNU General Public License
++ *   along with this program; if not, write to the Free Software
++ *   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ *
++ * Copyright 2001,2006  The FreeRADIUS server project
++ * Copyright 2012  Matt Redfearn <matt.redfearn@nxp.com>
++ */
++
++/* This module allows for an external script to be run if authentication fails
++ * via all other modules. This external script can then take an appropriate action
++ * to the authentication failure such as adding the user to a greylist file,
++ */
++
++#include <freeradius-devel/ident.h>
++RCSID("$Id$")
++
++#include <freeradius-devel/radiusd.h>
++#include <freeradius-devel/modules.h>
++
++#include <ctype.h>
++
++/*
++ *      Define a structure for our module configuration.
++ *
++ *      These variables do not need to be in a structure, but it's
++ *      a lot cleaner to do so, and a pointer to the structure can
++ *      be used as the instance handle.
++ */
++typedef struct rlm_greylist_t
++{
++    const char *name;   /* CONF_SECTION->name, not strdup'd */
++    char *script;       /* Greylist script to be run */
++    int   auth_type;    /* Auth type for this module */
++} rlm_greylist_t;
++
++/*
++ *      A mapping of configuration file names to internal variables.
++ *
++ *      Note that the string is dynamically allocated, so it MUST
++ *      be freed.  When the configuration file parse re-reads the string,
++ *      it free's the old one, and strdup's the new one, placing the pointer
++ *      to the strdup'd string into 'config.string'.  This gets around
++ *      buffer over-flows.
++ */
++static const CONF_PARSER module_config[] = 
++{
++    { "script", PW_TYPE_STRING_PTR, offsetof(rlm_greylist_t,script), NULL, NULL },
++    { NULL, -1, 0, NULL, NULL }
++};
++
++
++static int greylist_detach(void *instance)
++{
++    rlm_greylist_t *inst = (rlm_greylist_t *) instance;
++    
++    free(inst);
++
++    return 0;
++}
++
++
++static int greylist_instantiate(CONF_SECTION *conf, void **instance)
++{
++    rlm_greylist_t *inst;
++    DICT_VALUE *dval;
++
++    /*
++     *      Set up a storage area for instance data
++     */
++    inst = rad_malloc(sizeof(*inst));
++    if (!inst)
++    {
++        return -1;
++    }
++    memset(inst, 0, sizeof(*inst));
++
++    /*
++     *      If the configuration parameters can't be parsed, then
++     *      fail.
++     */
++    if (cf_section_parse(conf, inst, module_config) < 0)
++    {
++        greylist_detach(inst);
++        return -1;
++    }
++    
++    if (inst->script == NULL || strlen(inst->script) == 0)
++    {
++        radlog(L_ERR, "rlm_greylist: No script defined");
++        greylist_detach(inst);
++        return -1;
++    }
++
++    inst->name = cf_section_name2(conf);
++    if (!inst->name)
++    {
++        inst->name = cf_section_name1(conf);
++    }
++    
++    dval = dict_valbyname(PW_AUTH_TYPE, inst->name);
++    if (dval)
++    {
++        inst->auth_type = dval->value;
++    } 
++    else 
++    {
++        inst->auth_type = 0;
++    }
++
++    *instance = inst;
++
++    return 0;
++}
++
++
++/*
++ *	Greylist authentication checks if any other module has claimed 
++ *  to be able to authenticate the user and if not adds itself as
++ *  the authenticator.
++ */
++static int greylist_authorize(void *instance, REQUEST *request)
++{
++    rlm_greylist_t *inst = instance;
++    VALUE_PAIR *vp;
++    
++    if (!pairfind(request->config_items, PW_AUTH_TYPE))
++    {
++        /* Request has not already been claimed by another module */
++        RDEBUG("Not claimed by another module - adding greylist auth type.");
++        vp = radius_paircreate(request, &request->config_items,
++                        PW_AUTH_TYPE, PW_TYPE_INTEGER);
++        vp->vp_integer = inst->auth_type;
++        return RLM_MODULE_UPDATED;
++    }
++    
++    return RLM_MODULE_NOOP;
++}
++
++
++/*
++ *	Greylist authentication runs the configured greylist script.
++ */
++static int greylist_authenticate(void *instance, REQUEST *request)
++{
++    rlm_greylist_t *inst = instance;
++    
++    if (inst->script)
++    {
++        /*
++        * Get the correct username based on the configured value
++        */
++        VALUE_PAIR *username = NULL;
++        username = pairfind(request->packet->vps, PW_USER_NAME);
++
++        if (username)
++        {
++            char command_buffer[1024];
++            int result;
++            sprintf(command_buffer, "%s --user=%s", inst->script, username->vp_strvalue);
++            result = system(command_buffer);
++            radlog(L_INFO, "rlm_greylist: Greylist script (%s) for user '%s' result: %d", inst->script, username->vp_strvalue, result);
++            
++            /* User has been greylisted, reject the log in now */
++            return RLM_MODULE_REJECT;
++        }
++        else
++        {
++            RDEBUG("Could not determine username.");
++            return RLM_MODULE_INVALID;
++        }
++    }
++    return RLM_MODULE_FAIL;
++}
++
++
++/*
++ *	The module name should be the only globally exported symbol.
++ *	That is, everything else should be 'static'.
++ *
++ *	If the module needs to temporarily modify it's instantiation
++ *	data, the type should be changed to RLM_TYPE_THREAD_UNSAFE.
++ *	The server will then take care of ensuring that the module
++ *	is single-threaded.
++ */
++module_t rlm_greylist = 
++{
++    RLM_MODULE_INIT,
++    "greylist",
++    RLM_TYPE_CHECK_CONFIG_SAFE | RLM_TYPE_HUP_SAFE, /* type */
++    greylist_instantiate,                           /* instantiation */
++    greylist_detach,                                /* detach */
++    {
++        greylist_authenticate,  /* authentication */
++        greylist_authorize,     /* authorization */
++        NULL,                   /* preaccounting */
++        NULL,                   /* accounting */
++        NULL,                   /* checksimul */
++        NULL,                   /* pre-proxy */
++        NULL,                   /* post-proxy */
++        NULL                    /* post-auth */
++    },
++};
+diff -Naur freeradius-server-2.1.10/src/modules/rlm_greylist/rlm_greylist.c~ freeradius-server-2.1.10-new/src/modules/rlm_greylist/rlm_greylist.c~
+--- freeradius-server-2.1.10/src/modules/rlm_greylist/rlm_greylist.c~	1970-01-01 01:00:00.000000000 +0100
++++ freeradius-server-2.1.10-new/src/modules/rlm_greylist/rlm_greylist.c~	2012-02-27 11:57:45.517293125 +0000
+@@ -0,0 +1,211 @@
++/*
++ * rlm_greylist.c
++ *
++ * Version:  $Id$
++ *
++ *   This program is free software; you can redistribute it and/or modify
++ *   it under the terms of the GNU General Public License as published by
++ *   the Free Software Foundation; either version 2 of the License, or
++ *   (at your option) any later version.
++ *
++ *   This program is distributed in the hope that it will be useful,
++ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *   GNU General Public License for more details.
++ *
++ *   You should have received a copy of the GNU General Public License
++ *   along with this program; if not, write to the Free Software
++ *   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ *
++ * Copyright 2001,2006  The FreeRADIUS server project
++ * Copyright 2012  Matt Redfearn <matt.redfearn@nxp.com>
++ */
++
++/* This module allows for an external script to be run if authentication fails
++ * via all other modules. This external script can then take an appropriate action
++ * to the authentication failure such as adding the user to a greylist file,
++ */
++
++#include <freeradius-devel/ident.h>
++RCSID("$Id$")
++
++#include <freeradius-devel/radiusd.h>
++#include <freeradius-devel/modules.h>
++
++#include <ctype.h>
++
++/*
++ *      Define a structure for our module configuration.
++ *
++ *      These variables do not need to be in a structure, but it's
++ *      a lot cleaner to do so, and a pointer to the structure can
++ *      be used as the instance handle.
++ */
++typedef struct rlm_greylist_t {
++    const char *name;   /* CONF_SECTION->name, not strdup'd */
++    char *script;       /* Greylist script to be run */
++    int   auth_type;    /* Auth type for this module */
++} rlm_greylist_t;
++
++/*
++ *      A mapping of configuration file names to internal variables.
++ *
++ *      Note that the string is dynamically allocated, so it MUST
++ *      be freed.  When the configuration file parse re-reads the string,
++ *      it free's the old one, and strdup's the new one, placing the pointer
++ *      to the strdup'd string into 'config.string'.  This gets around
++ *      buffer over-flows.
++ */
++static const CONF_PARSER module_config[] = {
++    { "script", PW_TYPE_STRING_PTR, offsetof(rlm_greylist_t,script), NULL, NULL },
++    { NULL, -1, 0, NULL, NULL }
++};
++
++
++static int greylist_detach(void *instance)
++{
++    rlm_greylist_t *inst = (rlm_greylist_t *) instance;
++    
++    free(inst);
++
++    return 0;
++}
++
++
++static int greylist_instantiate(CONF_SECTION *conf, void **instance)
++{
++    rlm_greylist_t *inst;
++    DICT_VALUE *dval;
++
++    /*
++     *      Set up a storage area for instance data
++     */
++    inst = rad_malloc(sizeof(*inst));
++    if (!inst) {
++        return -1;
++    }
++    memset(inst, 0, sizeof(*inst));
++
++    /*
++     *      If the configuration parameters can't be parsed, then
++     *      fail.
++     */
++    if (cf_section_parse(conf, inst, module_config) < 0)
++    {
++        greylist_detach(inst);
++        return -1;
++    }
++    if (inst->script == NULL || strlen(inst->script) == 0)
++    {
++        radlog(L_ERR, "rlm_greylist: No script defined");
++        greylist_detach(inst);
++        return -1;
++    }
++
++    inst->name = cf_section_name2(conf);
++    if (!inst->name)
++    {
++        inst->name = cf_section_name1(conf);
++    }
++    
++    dval = dict_valbyname(PW_AUTH_TYPE, inst->name);
++    if (dval)
++    {
++        inst->auth_type = dval->value;
++    } 
++    else 
++    {
++        inst->auth_type = 0;
++    }
++
++    *instance = inst;
++
++    return 0;
++}
++
++
++/*
++ *	Greylist authentication checks if any other module has claimed 
++ *  to be able to authenticate the user and if not adds itself as
++ *  the authenticator.
++ */
++static int greylist_authorize(void *instance, REQUEST *request)
++{
++    rlm_greylist_t *inst = instance;
++    VALUE_PAIR *vp;
++    
++    if (!pairfind(request->config_items, PW_AUTH_TYPE))
++    {
++        /* Request has not already been claimed by another module */
++        RDEBUG("Not claimed by another module - adding greylist auth type.");
++        vp = radius_paircreate(request, &request->config_items,
++                        PW_AUTH_TYPE, PW_TYPE_INTEGER);
++        vp->vp_integer = inst->auth_type;
++        return RLM_MODULE_UPDATED;
++    }
++    
++    return RLM_MODULE_NOOP;
++}
++
++
++/*
++ *	Greylist authentication runs the configured greylist script.
++ */
++static int greylist_authenticate(void *instance, REQUEST *request)
++{
++    rlm_greylist_t *inst = instance;
++    
++    if (inst->script) {
++        /*
++        * Get the correct username based on the configured value
++        */
++        VALUE_PAIR *username = NULL;
++        username = pairfind(request->packet->vps, PW_USER_NAME);
++
++        if (username)
++        {
++            char command_buffer[1024];
++            int result;
++            sprintf(command_buffer, "%s --user=%s", inst->script, username->vp_strvalue);
++            result = system(command_buffer);
++            radlog(L_INFO, "rlm_greylist: Greylist script (%s) for user '%s' result: %d", inst->script, username->vp_strvalue, result);
++            
++            /* User has been greylisted, reject the log in now */
++            return RLM_MODULE_REJECT;
++        }
++        else
++        {
++            RDEBUG("Could not determine username.");
++            return RLM_MODULE_INVALID;
++        }
++    }
++    return RLM_MODULE_FAIL;
++}
++
++
++/*
++ *	The module name should be the only globally exported symbol.
++ *	That is, everything else should be 'static'.
++ *
++ *	If the module needs to temporarily modify it's instantiation
++ *	data, the type should be changed to RLM_TYPE_THREAD_UNSAFE.
++ *	The server will then take care of ensuring that the module
++ *	is single-threaded.
++ */
++module_t rlm_greylist = {
++    RLM_MODULE_INIT,
++    "greylist",
++    RLM_TYPE_CHECK_CONFIG_SAFE | RLM_TYPE_HUP_SAFE, /* type */
++    greylist_instantiate,                           /* instantiation */
++    greylist_detach,                                /* detach */
++    {
++        greylist_authenticate,  /* authentication */
++        greylist_authorize,     /* authorization */
++        NULL,                   /* preaccounting */
++        NULL,                   /* accounting */
++        NULL,                   /* checksimul */
++        NULL,                   /* pre-proxy */
++        NULL,                   /* post-proxy */
++        NULL                    /* post-auth */
++    },
++};
+diff -Naur freeradius-server-2.1.10/src/modules/stable freeradius-server-2.1.10-new/src/modules/stable
+--- freeradius-server-2.1.10/src/modules/stable	2010-09-28 12:03:56.000000000 +0100
++++ freeradius-server-2.1.10-new/src/modules/stable	2012-02-27 09:39:15.689180272 +0000
+@@ -16,6 +16,7 @@
+ rlm_expr
+ rlm_fastusers
+ rlm_files
++rlm_greylist
+ rlm_ippool
+ rlm_krb5
+ rlm_ldap

@@ -1,0 +1,160 @@
+--- a/raddb/radiusd.conf.in
++++ b/raddb/radiusd.conf.in
+@@ -270,11 +270,11 @@
+ 	#	dotted quad (1.2.3.4)
+ 	#       hostname    (radius.example.com)
+ 	#       wildcard    (*)
+-	ipaddr = *
++#	ipaddr = *
+ 
+ 	#  OR, you can use an IPv6 address, but not both
+ 	#  at the same time.
+-#	ipv6addr = ::	# any.  ::1 == localhost
++	ipv6addr = ::	# any.  ::1 == localhost
+ 
+ 	#  Port on which to listen.
+ 	#  Allowed values are:
+@@ -290,7 +290,7 @@
+ 	#  If your system does not support this feature, you will
+ 	#  get an error if you try to use it.
+ 	#
+-	interface = br-lan
++#	interface = br-lan
+ 
+ 	#  Per-socket lists of clients.  This is a very useful feature.
+ 	#
+@@ -317,7 +317,7 @@
+ #	ipv6addr = ::
+ 	port = 0
+ 	type = acct
+-	interface = br-lan
++#	interface = br-lan
+ #	clients = per_socket_clients
+ }
+ 
+@@ -440,7 +440,7 @@
+ 	#
+ 	#  allowed values: {no, yes}
+ 	#
+-	auth = no
++	auth = yes
+ 
+ 	#  Log passwords with the authentication requests.
+ 	#  auth_badpass  - logs password if it's rejected
+@@ -448,7 +448,7 @@
+ 	#
+ 	#  allowed values: {no, yes}
+ 	#
+-	auth_badpass = no
++	auth_badpass = yes
+ 	auth_goodpass = no
+ 
+ 	#  Log additional text at the end of the "Login OK" messages.
+@@ -675,7 +675,7 @@
+ 	#  For all EAP related authentications.
+ 	#  Now in another file, because it is very large.
+ 	#
+-	$INCLUDE eap.conf
++#	$INCLUDE eap.conf
+ 
+ 	#  Include another file that has the SQL-related configuration.
+ 	#  This is another file only because it tends to be big.
+--- a/raddb/sites-available/default
++++ b/raddb/sites-available/default
+@@ -135,9 +135,9 @@
+ 	#  for the many packets that go back and forth to set up TTLS
+ 	#  or PEAP.  The load on those servers will therefore be reduced.
+ 	#
+-	eap {
+-		ok = return
+-	}
++	#eap {
++	#	ok = return
++	#}
+ 
+ 	#
+ 	#  Pull crypt'd passwords from /etc/passwd or /etc/shadow,
+@@ -193,6 +193,10 @@
+ 	#
+ 	pap
+ 
++	#  Enable NXP Greylisting - if no other module has managed to authenticate the client,
++	#  It can be greylisted by this module.
++	greylist
++
+ 	#
+ 	#  If "status_server = yes", then Status-Server messages are passed
+ 	#  through the following section, and ONLY the following section.
+@@ -245,15 +249,15 @@
+ 	#  A back-end database listed in the 'authorize' section
+ 	#  MUST supply a CLEAR TEXT password.  Encrypted passwords
+ 	#  won't work.
+-	Auth-Type CHAP {
+-		chap
+-	}
++	#Auth-Type CHAP {
++	#	chap
++	#}
+ 
+ 	#
+ 	#  MSCHAP authentication.
+-	Auth-Type MS-CHAP {
+-		mschap
+-	}
++	#Auth-Type MS-CHAP {
++	#	mschap
++	#}
+ 
+ 	#
+ 	#  If you have a Cisco SIP server authenticating against
+@@ -289,7 +293,7 @@
+ 
+ 	#
+ 	#  Allow EAP authentication.
+-	eap
++	#eap
+ 
+ 	#
+ 	#  The older configurations sent a number of attributes in
+@@ -306,6 +310,11 @@
+ #			handled  # override the "updated" code from attr_filter
+ #		}
+ #	}
++	
++	#  Enable NXP Greylisting - if no other module has managed to authenticate the client,
++	#  It can be greylisted by this module.
++	greylist
++
+ }
+ 
+ 
+@@ -411,7 +420,7 @@
+ #	pgsql-voip
+ 
+ 	# For Exec-Program and Exec-Program-Wait
+-	exec
++#	exec
+ 
+ 	#  Filter attributes from the accounting response.
+ 	#attr_filter.accounting_response
+@@ -429,7 +438,7 @@
+ #  or rlm_sql module can handle this.
+ #  The rlm_sql module is *much* faster
+ session {
+-	radutmp
++#	radutmp
+ 
+ 	#
+ 	#  See "Simultaneous Use Checking Queries" in sql.conf
+--- a/raddb/users
++++ b/raddb/users
+@@ -83,6 +83,9 @@
+ #	Framed-MTU = 1500,
+ #	Framed-Compression = Van-Jacobsen-TCP-IP
+ 
++
++$INCLUDE /etc/freeradius2/users.6LoWPAN
++	
+ #
+ # This is an entry for a user with a space in their name.
+ # Note the double quotes surrounding the name.

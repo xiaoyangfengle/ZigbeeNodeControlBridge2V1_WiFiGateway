@@ -1,0 +1,18 @@
+--- backfire/feeds/packages/net/freeradius2/files/radiusd.init	2013-02-01 14:58:43.732400125 +0000
++++ backfire/feeds/packages/net/freeradius2/files/radiusd.init	2013-02-01 15:01:15.902497733 +0000
+@@ -7,14 +7,13 @@
+ RUN_D=/var/run
+ PID_F=$RUN_D/radiusd.pid
+ RADACCT_D=/var/db/radacct
+-IPADDR=$(ifconfig br-lan | sed -n 's/.*dr:\(.*\)Bc.*/\1/p')
+ 
+ start() {
+ 	[ -f $DEFAULT ] && . $DEFAULT
+ 	mkdir -p $LOG_D
+ 	mkdir -p $RUN_D
+ 	mkdir -p $RADACCT_D
+-	radiusd -i $IPADDR -p 1812,1813 $OPTIONS
++	radiusd $OPTIONS
+ }
+ 
+ stop() {
